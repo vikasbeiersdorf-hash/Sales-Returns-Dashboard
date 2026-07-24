@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sales Ledger — Beiersdorf India | Jul 2026</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --ink:#161d2b;
+    --masthead-bg:#1c8fce;
+    --ink-soft:#3d4759;
+    --paper:#f7f5ef;
+    --paper-raised:#ffffff;
+    --line:#dcd7c9;
+    --brass:#b8863b;
+    --brass-deep:#8f6427;
+    --teal:#2c5f5a;
+    --teal-soft:#e4ecea;
+    --red:#a8432f;
+    --tab-active-bg:#eaf1fb;
+    --tab-active-line:#2f5fa8;
+    --shadow: 0 1px 2px rgba(22,29,43,0.04), 0 8px 24px rgba(22,29,43,0.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  /* ---------- Ledger header ---------- */
+  .masthead{
+    background:var(--masthead-bg);
+    color:#f2ede1;
+    padding:38px 56px 30px;
+    position:relative;
+    overflow:hidden;
+  }
+  .masthead::after{
+    content:"";
+    position:absolute; right:-60px; top:-60px;
+    width:280px; height:280px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,0.22), transparent 70%);
+  }
+  .masthead-top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    position:relative; z-index:1;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:.18em; text-transform:uppercase;
+    font-size:11.5px; color:var(--brass); font-weight:600;
+    margin:0 0 10px;
+  }
+  h1.title{
+    font-family:'Fraunces', serif; font-weight:500; font-size:38px;
+    margin:0; letter-spacing:-0.01em; line-height:1.05;
+  }
+  .subtitle{ color:#c9c2ae; font-size:14px; margin-top:8px; max-width:520px; line-height:1.5;}
+  .masthead-meta{ text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#c9c2ae; line-height:1.9;}
+  .masthead-meta b{color:#f2ede1; font-weight:600;}
+
+  /* ---------- Tabs bar ---------- */
+  .tabs-bar{
+    background:#fff; border-bottom:1px solid #e6e3d8;
+    padding:0 56px; display:flex; gap:6px; overflow-x:auto;
+    position:sticky; top:0; z-index:20; box-shadow:0 1px 0 rgba(0,0,0,0.02);
+  }
+  .tab-btn{
+    display:flex; align-items:center; gap:9px; padding:15px 16px 13px;
+    border:none; background:transparent; color:#697086; font-size:14.5px; font-weight:500;
+    cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;
+    font-family:'Inter',sans-serif; transition:.15s;
+  }
+  .tab-btn svg{ width:17px; height:17px; flex-shrink:0; }
+  .tab-btn:hover{ background:#f7f8fb; }
+  .tab-btn.active{
+    color:#152340; background:var(--tab-active-bg);
+    border-radius:8px 8px 0 0; border-bottom:3px solid var(--tab-active-line);
+    font-weight:600;
+  }
+
+  /* ---------- Filter bar ---------- */
+  .filter-bar-wrap{ background:#fbfaf6; border-bottom:1px solid var(--line); }
+  .filter-bar{
+    max-width:1240px; margin:0 auto; padding:14px 56px;
+    display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap;
+  }
+  .filter-field label{
+    display:block; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-soft); margin-bottom:5px; font-weight:600;
+  }
+  .filter-field input[type=date]{
+    font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600;
+    background:#fff; border:1px solid var(--line);
+    color:var(--ink); padding:7px 9px; border-radius:3px;
+  }
+  .quick-btns{ display:flex; gap:6px; }
+  .qbtn{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; padding:7px 11px;
+    border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+    border-radius:3px; cursor:pointer; transition:.15s;
+  }
+  .qbtn:hover{ background:var(--teal-soft); }
+  .qbtn.active{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  #resultNote{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--brass-deep); margin-left:auto; align-self:center;}
+
+  /* ---------- Body wrap ---------- */
+  .wrap{ max-width:1240px; margin:0 auto; padding:34px 56px 70px;}
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; animation:fadeIn .25s ease; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  /* ---------- KPI row ---------- */
+  .kpi-row{
+    display:grid; grid-template-columns:repeat(5,1fr); gap:1px;
+    background:var(--line);
+    margin-bottom:40px;
+    border:1px solid var(--line);
+  }
+  .kpi{ background:var(--paper-raised); padding:22px 20px 18px; }
+  .kpi .k{ font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-soft); font-weight:600;}
+  .kpi .v{ font-family:'IBM Plex Mono',monospace; font-size:25px; font-weight:600; color:var(--ink); margin-top:9px;}
+  .kpi .d{ font-size:11.5px; color:var(--teal); margin-top:6px; font-weight:500;}
+
+  /* ---------- Section ---------- */
+  section{ margin-top:44px;}
+  section:first-child{ margin-top:0; }
+  .section-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom:2px solid var(--ink); padding-bottom:10px; margin-bottom:22px;
+  }
+  .section-head h2{ font-family:'Fraunces',serif; font-weight:500; font-size:22px; margin:0; }
+  .section-head .tag{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft); letter-spacing:.05em;}
+
+  .grid-3col{ display:grid; grid-template-columns:1fr 1fr 1.05fr; gap:24px; align-items:start;}
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start;}
+  .grid-wide{ display:grid; grid-template-columns:1.3fr 1fr; gap:24px; align-items:start;}
+  .card{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:3px;
+    padding:22px 24px; box-shadow:var(--shadow);
+  }
+  .card h3{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:0 0 16px; font-weight:600;}
+  .scroll-y{ max-height:520px; overflow-y:auto; }
+  .scroll-y::-webkit-scrollbar{ width:8px; height:8px;}
+  .scroll-y::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px;}
+  th{
+    text-align:left; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-soft); font-weight:600; padding:8px 10px; border-bottom:1.5px solid var(--ink);
+    position:sticky; top:0; background:var(--paper-raised); white-space:nowrap;
+  }
+  td{ padding:8px 10px; border-bottom:1px solid var(--line); color:var(--ink); white-space:nowrap;}
+  tr:last-child td{ border-bottom:none;}
+  td.num, th.num{ text-align:right; font-family:'IBM Plex Mono',monospace;}
+  td.rank{ color:var(--brass-deep); font-family:'IBM Plex Mono',monospace; font-weight:600; width:26px;}
+  .bar-track{ background:var(--teal-soft); border-radius:2px; height:6px; width:100%; overflow:hidden; margin-top:5px;}
+  .bar-fill{ background:var(--teal); height:100%; border-radius:2px;}
+  .name-trunc{ max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:bottom;}
+
+  canvas{ max-width:100%;}
+
+  /* ---------- Search section ---------- */
+  .search-bar{ display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .search-input{
+    flex:1; min-width:260px; font-family:'Inter',sans-serif; font-size:14px;
+    padding:11px 14px; border:1.5px solid var(--line); border-radius:3px; background:var(--paper);
+  }
+  .search-input:focus{ outline:none; border-color:var(--teal); }
+  .search-meta{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); white-space:nowrap;}
+  select.chan-select{
+    font-family:'Inter',sans-serif; font-size:13.5px; padding:10px 12px; border:1.5px solid var(--line);
+    border-radius:3px; background:var(--paper); color:var(--ink);
+  }
+  .empty-state{ padding:40px 0; text-align:center; color:var(--ink-soft); font-size:13.5px; }
+
+  /* ---------- All sales report tab ---------- */
+  .allsales-toolbar{
+    display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px;
+  }
+  .allsales-info{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--ink-soft); }
+  .btn-download{
+    display:flex; align-items:center; gap:8px; background:var(--teal); color:#fff; border:none;
+    padding:11px 18px; border-radius:4px; font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600;
+    cursor:pointer; transition:.15s; box-shadow:var(--shadow);
+  }
+  .btn-download:hover{ background:#234b47; }
+  .btn-download svg{ width:16px; height:16px; }
+  .allsales-table-wrap{
+    overflow:auto; max-height:600px; border:1px solid var(--line); background:#fff;
+  }
+  .allsales-table-wrap table{ font-size:11.5px; }
+  .allsales-table-wrap th, .allsales-table-wrap td{ padding:6px 9px; }
+  .pager{
+    display:flex; align-items:center; gap:14px; justify-content:center; margin-top:18px;
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px;
+  }
+  .pager button{
+    background:#fff; border:1px solid var(--line); border-radius:3px; padding:7px 14px;
+    cursor:pointer; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink);
+  }
+  .pager button:disabled{ opacity:.4; cursor:not-allowed; }
+  .pager button:hover:not(:disabled){ background:var(--teal-soft); }
+
+  footer{
+    margin-top:60px; padding-top:22px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-soft);
+    font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media (max-width:1100px){ .grid-3col{ grid-template-columns:1fr; } .grid-wide{ grid-template-columns:1fr; } }
+  @media (max-width:920px){
+    .masthead{padding:28px 20px 22px;}
+    .tabs-bar{ padding:0 20px; }
+    .filter-bar{ padding:14px 20px; }
+    .wrap{padding:24px 20px 50px;}
+    .kpi-row{ grid-template-columns:repeat(2,1fr);}
+    .grid-2{ grid-template-columns:1fr;}
+    h1.title{font-size:28px;}
+    .masthead-top{flex-direction:column; gap:14px;}
+    .masthead-meta{text-align:left;}
+    #resultNote{ margin-left:0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loadOverlay" style="position:fixed; inset:0; background:#f7f5ef; z-index:999; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; font-family:'IBM Plex Mono',monospace;">
+  <div style="width:34px; height:34px; border:3px solid #dcd7c9; border-top-color:#2c5f5a; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+  <div id="loadMsg" style="color:#3d4759; font-size:13px;">Loading sales data…</div>
+</div>
+<style>@keyframes spin{ to{ transform:rotate(360deg); } }</style>
+
+
+<div class="masthead">
+  <div class="masthead-top">
+    <div>
+      <p class="eyebrow">Beiersdorf India Pvt.Ltd.</p>
+      <h1 class="title">Sales & Return Dashboard</h1>
+    </div>
+    <div class="masthead-meta">
+      <div>Prepared for <b>Business Review</b></div>
+      <div>Generated <b id="genDate"></b></div>
+    </div>
+  </div>
+</div>
+
+<div class="tabs-bar" id="tabsBar">
+  <button class="tab-btn active" data-tab="charts">
+    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="12" width="4" height="8" rx="1" fill="#2f5fa8"/><rect x="10" y="7" width="4" height="13" rx="1" fill="#2c9e6b"/><rect x="17" y="3" width="4" height="17" rx="1" fill="#e08a3c"/></svg>
+    Charts
+  </button>
+  <button class="tab-btn" data-tab="channel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#2c5f5a" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3 A9 9 0 0 1 21 12 L12 12 Z" fill="#2c5f5a"/></svg>
+    Channel Wise
+  </button>
+  <button class="tab-btn" data-tab="location">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#d1447b" stroke-width="2"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3" fill="#d1447b" stroke="none"/></svg>
+    Locations
+  </button>
+  <button class="tab-btn" data-tab="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#2f6fd6" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.35-4.35"/></svg>
+    Customised Data
+  </button>
+  <button class="tab-btn" data-tab="allsales">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#8259a3" stroke-width="2"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/></svg>
+    All Sales Report
+  </button>
+  <button class="tab-btn" data-tab="allreturns">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#c1512e" stroke-width="2"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/></svg>
+    All Returns Report
+  </button>
+  <button class="tab-btn" data-tab="returns">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#c1512e" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg>
+    Sales Returns
+  </button>
+  <button class="tab-btn" data-tab="ledger">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#3f6fd6" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+    Customer Ledger
+  </button>
+</div>
+
+<div class="filter-bar-wrap" id="filterBarWrap">
+  <div class="filter-bar">
+    <div class="filter-field">
+      <label>From</label>
+      <input type="date" id="dateFrom">
+    </div>
+    <div class="filter-field">
+      <label>To</label>
+      <input type="date" id="dateTo">
+    </div>
+    <div class="quick-btns" id="quickBtns">
+      <button class="qbtn active" data-range="all">Full period</button>
+      <button class="qbtn" data-range="7">Last 7 days</button>
+      <button class="qbtn" data-range="wk1">Week 1</button>
+      <button class="qbtn" data-range="wk2">Week 2</button>
+      <button class="qbtn" data-range="wk3">Week 3+</button>
+    </div>
+    <div id="resultNote">—</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ===================== TAB: CHARTS ===================== -->
+  <div class="tab-panel active" id="tab-charts">
+    <div class="kpi-row">
+      <div class="kpi"><div class="k">Gross Sales Value</div><div class="v" id="kpiGross">—</div><div class="d">Net of scheme, incl. tax</div></div>
+      <div class="kpi"><div class="k">Net Base Value</div><div class="v" id="kpiBase">—</div><div class="d">Pre-tax billed value</div></div>
+      <div class="kpi"><div class="k">Units Sold</div><div class="v" id="kpiQty">—</div><div class="d">Total sale quantity</div></div>
+      <div class="kpi"><div class="k">Invoices Raised</div><div class="v" id="kpiTxns">—</div><div class="d">Distinct billing docs</div></div>
+      <div class="kpi"><div class="k">Avg Invoice Value</div><div class="v" id="kpiAvg">—</div><div class="d">Gross value / invoice</div></div>
+    </div>
+
+    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr); margin-top:2px; margin-bottom:40px;">
+      <div class="kpi"><div class="k">Sales Returns Value</div><div class="v" id="kpiRetVal" style="color:var(--red);">—</div><div class="d" id="kpiRetD">Goods returned, same period</div></div>
+      <div class="kpi"><div class="k">Return Rate</div><div class="v" id="kpiRetRate">—</div><div class="d">Returns as % of gross sales</div></div>
+      <div class="kpi"><div class="k">Net Sales Value</div><div class="v" id="kpiNetSales">—</div><div class="d">Gross sales − returns</div></div>
+    </div>
+
+    <section>
+      <div class="section-head"><h2>Daily Sales Trend</h2><span class="tag">Gross value &amp; invoice count, day-wise</span></div>
+      <div class="card"><canvas id="trendChart" height="90"></canvas></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Top Movers</h2><span class="tag">Best-selling SKUs &amp; largest accounts</span></div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Top 10 items by value</h3>
+          <table><thead><tr><th>#</th><th>Item</th><th class="num">Value (₹)</th><th class="num">Qty</th></tr></thead><tbody id="itemTable"></tbody></table>
+        </div>
+        <div class="card">
+          <h3>Top 10 customers by value</h3>
+          <table><thead><tr><th>#</th><th>Customer</th><th class="num">Value (₹)</th><th class="num">Inv.</th></tr></thead><tbody id="custTable"></tbody></table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== TAB: CHANNEL WISE ===================== -->
+  <div class="tab-panel" id="tab-channel">
+    <section>
+      <div class="section-head"><h2>Channel Wise Sales</h2><span class="tag">Sales Type · full breakdown</span></div>
+      <div class="grid-wide">
+        <div class="card">
+          <h3>Value by channel, ranked</h3>
+          <table><thead><tr><th>#</th><th>Channel</th><th class="num">Sales Value (₹)</th><th class="num">Sales Qty</th><th class="num">Invoices</th><th class="num">Return Value (₹)</th><th class="num">Return Qty</th><th class="num">Net Value (₹)</th><th class="num">Share</th></tr></thead><tbody id="channelTableFull"></tbody></table>
+        </div>
+        <div class="card">
+          <h3>Share of value by channel</h3>
+          <canvas id="channelChart" height="320"></canvas>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== TAB: LOCATIONS ===================== -->
+  <div class="tab-panel" id="tab-location">
+    <section>
+      <div class="section-head"><h2>Location Performance</h2><span class="tag">All branches · full breakdown</span></div>
+      <div class="grid-wide">
+        <div class="card">
+          <h3>Value by location, ranked</h3>
+          <div class="scroll-y">
+          <table><thead><tr><th>#</th><th>Location</th><th class="num">Sales Value (₹)</th><th class="num">Sales Qty</th><th class="num">Invoices</th><th class="num">Return Value (₹)</th><th class="num">Return Qty</th><th class="num">Net Value (₹)</th><th style="width:110px;">Share</th></tr></thead><tbody id="locationTableFull"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Top locations by value</h3>
+          <canvas id="locationChart" height="360"></canvas>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== TAB: CUSTOMISED DATA ===================== -->
+  <div class="tab-panel" id="tab-search">
+    <section>
+      <div class="section-head"><h2>Customised Sales Search</h2><span class="tag">Search line-items · item, customer, location, channel, PO or invoice no.</span></div>
+      <div class="card">
+        <div class="search-bar">
+          <input type="text" class="search-input" id="searchBox" placeholder="Search anything — e.g. Zepto, Nivea, Crepe, Mumbai, PO number, invoice ref…">
+          <select class="chan-select" id="searchChannel"><option value="">All channels</option></select>
+          <select class="chan-select" id="searchSeries"><option value="">All series</option></select>
+          <div class="search-meta" id="searchMeta">0 rows</div>
+        </div>
+        <div class="scroll-y" id="searchTableWrap" style="max-height:520px;">
+          <table>
+            <thead><tr><th>Date</th><th>Location</th><th>Store</th><th>Cust Code</th><th>Channel</th><th>Series</th><th>Item</th><th>Item Code</th><th>Customer</th><th class="num">Qty</th><th class="num">Value (₹)</th><th>PO No.</th><th>BT Ref No.</th><th>IGPID</th><th>Invoice Ref</th></tr></thead>
+            <tbody id="searchTable"></tbody>
+          </table>
+          <div class="empty-state" id="searchEmpty" style="display:none;">No matching records for this search.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== TAB:ALL SALES REPORT ===================== -->
+  <div class="tab-panel" id="tab-allsales">
+    <section>
+      <div class="section-head"><h2>Sales Report</h2><span class="tag">Full transaction export · unfiltered, as in source file</span></div>
+      <div class="card">
+        <div class="allsales-toolbar">
+          <div class="allsales-info" id="allsalesInfo">Loading…</div>
+          <button class="btn-download" id="downloadBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+            Download Excel
+          </button>
+        </div>
+        <div class="allsales-table-wrap">
+          <table>
+            <thead><tr id="allsalesHead"></tr></thead>
+            <tbody id="allsalesBody"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button id="pagerFirst">« First</button>
+          <button id="pagerPrev">‹ Prev</button>
+          <span id="pagerInfo">Page 1 of 1</span>
+          <button id="pagerNext">Next ›</button>
+          <button id="pagerLast">Last »</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== TAB: ALL RETURNS REPORT ===================== -->
+  <div class="tab-panel" id="tab-allreturns">
+    <section style="margin-top:0;">
+      <div class="section-head"><h2>Returns Report</h2><span class="tag">Full transaction export · unfiltered, as in source file</span></div>
+      <div class="card">
+        <div class="allsales-toolbar">
+          <div class="allsales-info" id="retAllInfo">Loading…</div>
+          <button class="btn-download" id="retDownloadBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+            Download Excel
+          </button>
+        </div>
+        <div class="allsales-table-wrap">
+          <table>
+            <thead><tr id="retAllHead"></tr></thead>
+            <tbody id="retAllBody"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button id="retPagerFirst">« First</button>
+          <button id="retPagerPrev">‹ Prev</button>
+          <span id="retPagerInfo">Page 1 of 1</span>
+          <button id="retPagerNext">Next ›</button>
+          <button id="retPagerLast">Last »</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== TAB: SALES RETURNS ===================== -->
+  <div class="tab-panel" id="tab-returns">
+    <div class="kpi-row">
+      <div class="kpi"><div class="k">Total Return Value</div><div class="v" id="retKpiGross" style="color:var(--red);">—</div><div class="d">Gross value returned</div></div>
+      <div class="kpi"><div class="k">Return Base Value</div><div class="v" id="retKpiBase">—</div><div class="d">Pre-tax value returned</div></div>
+      <div class="kpi"><div class="k">Units Returned</div><div class="v" id="retKpiQty">—</div><div class="d">Total return quantity</div></div>
+      <div class="kpi"><div class="k">Return Notes</div><div class="v" id="retKpiTxns">—</div><div class="d">Distinct return docs</div></div>
+      <div class="kpi"><div class="k">Avg Value / Note</div><div class="v" id="retKpiAvg">—</div><div class="d">Return value / note</div></div>
+    </div>
+
+    <section style="margin-top:0;">
+      <div class="section-head"><h2>Return Reasons</h2><span class="tag">DFSLRTRSCD · breakdown by reason code</span></div>
+      <div class="grid-wide">
+        <div class="card">
+          <h3>Value by return reason</h3>
+          <table><thead><tr><th>#</th><th>Reason</th><th class="num">Value (₹)</th><th class="num">Qty</th><th class="num">Notes</th><th class="num">Share</th></tr></thead><tbody id="retReasonTable"></tbody></table>
+        </div>
+        <div class="card">
+          <h3>Share by reason</h3>
+          <canvas id="retReasonChart" height="300"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Top Returned Items</h2><span class="tag">Where returns are concentrated by SKU</span></div>
+      <div class="card">
+        <h3>Top 10 items by return value</h3>
+        <table><thead><tr><th>#</th><th>Item</th><th class="num">Value (₹)</th><th class="num">Qty</th></tr></thead><tbody id="retItemTable"></tbody></table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== TAB: CUSTOMER LEDGER ===================== -->
+  <div class="tab-panel" id="tab-ledger">
+    <div class="card" style="margin-bottom:24px;">
+      <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="filter-field" style="flex:1; min-width:240px;">
+          <label>Search customer / invoice / GIS ref</label>
+          <input type="text" id="ledgerSearch" class="search-input" style="padding:8px 12px;" placeholder="Customer name, code, invoice no, IGPID…">
+        </div>
+        <div class="quick-btns">
+          <button class="qbtn active" data-ledfilter="all">All rows</button>
+          <button class="qbtn" data-ledfilter="withret">With return only</button>
+          <button class="qbtn" data-ledfilter="noret">No return</button>
+        </div>
+        <div class="search-meta" id="ledgerNote" style="align-self:center; max-width:360px; line-height:1.5;">
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi-row" style="grid-template-columns:repeat(4,1fr);">
+      <div class="kpi"><div class="k">Sales Invoices</div><div class="v" id="ledKpiInvCount">—</div><div class="d">Total invoice rows</div></div>
+      <div class="kpi"><div class="k">Total Sale Value</div><div class="v" id="ledKpiTotal">—</div><div class="d">Sum of Sales GRVAL</div></div>
+      <div class="kpi"><div class="k">Invoices With Return</div><div class="v" id="ledKpiLinked">—</div><div class="d">Matched via IGPID ↔ DFIGPID</div></div>
+      <div class="kpi"><div class="k">Total Return Value</div><div class="v" id="ledKpiRetTotal" style="color:var(--red);">—</div><div class="d">Sum of linked returns</div></div>
+    </div>
+
+    <section style="margin-top:0;">
+      <div class="section-head"><h2>Sales &amp; Sales Return — Combined Ledger</h2><span class="tag">Linked by IGPID (sales) ↔ DFIGPID (return)</span></div>
+      <div class="card">
+        <div class="allsales-toolbar">
+          <div class="allsales-info">Export the current filtered view, including sales and linked return columns.</div>
+          <button class="btn-download" id="ledgerDownloadBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+            Download Excel
+          </button>
+        </div>
+        <div class="scroll-y" style="max-height:560px;">
+          <table>
+            <thead>
+              <tr>
+                <th colspan="9" style="text-align:center; background:var(--teal-soft); color:var(--teal); border-bottom:2px solid var(--teal);">Sales</th>
+                <th colspan="4" style="text-align:center; background:#fbe9e3; color:var(--red); border-bottom:2px solid var(--red);">Sales Return</th>
+              </tr>
+              <tr>
+                <th>LOCCD</th><th>STORECD</th><th>Sales Type</th><th>TXDT</th><th>Po No</th><th>IGPID</th><th>CUSTCD</th><th>CUSTNAME</th><th class="num">GRVAL (₹)</th>
+                <th>TXDT</th><th>SIGPID</th><th>DFIGPID</th><th class="num">GRVAL (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerTable"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button id="ledFirst">« First</button>
+          <button id="ledPrev">‹ Prev</button>
+          <span id="ledInfo">Page 1 of 1</span>
+          <button id="ledNext">Next ›</button>
+          <button id="ledLast">Last »</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+
+  <footer>
+    <span>Beiersdorf India · Secondary Sales Ledger</span>
+    <span>All values in INR · figures rounded to nearest rupee</span>
+  </footer>
+
+</div>
+
+<script>
+let FULL, RET_FULL, LEDGER, COLS, RAW, RET_COLS, RET_RAW, I, RI, ROWS, RETURN_ROWS, LEDGER_ROWS;
+const idx = (name) => COLS.indexOf(name);
+const ridx = (name) => RET_COLS.indexOf(name);
+
+function cleanLoc(s){
+  return s.replace('Beiersdorf India Pvt.Ltd. ','').replace('Beiersdorf India Pvt. Ltd. ','').replace('Beiersdorf India Pvt. LTd. ','').replace(/\.$/,'').trim();
+}
+
+/* ---------------- formatting helpers ---------------- */
+function inr(n, decimals=0){
+  n = Number(n);
+  const isNeg = n < 0; n = Math.abs(n);
+  let fixed = n.toFixed(decimals);
+  let [intPart, dec] = fixed.split('.');
+  let lastThree = intPart.slice(-3);
+  let other = intPart.slice(0, -3);
+  if(other !== '') lastThree = ',' + lastThree;
+  let formatted = other.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + lastThree;
+  return (isNeg?'-':'') + '₹' + formatted + (decimals? '.'+dec : '');
+}
+function num(n){
+  n = Math.round(Number(n));
+  let s = Math.abs(n).toString();
+  let lastThree = s.slice(-3);
+  let other = s.slice(0, -3);
+  if(other !== '') lastThree = ',' + lastThree;
+  return (n<0?'-':'') + other.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + lastThree;
+}
+function cr(n){ return (n/1e7).toFixed(2) + ' Cr'; }
+function fmtDate(d){ const dt = new Date(d+'T00:00:00'); return dt.getDate()+' '+dt.toLocaleString('en-IN',{month:'short'}); }
+
+/* ---------------- tabs ---------------- */
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabPanels = document.querySelectorAll('.tab-panel');
+const filterBarWrap = document.getElementById('filterBarWrap');
+tabButtons.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    tabButtons.forEach(b=>b.classList.remove('active'));
+    tabPanels.forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    filterBarWrap.style.display = (btn.dataset.tab === 'allsales' || btn.dataset.tab === 'ledger' || btn.dataset.tab === 'allreturns') ? 'none' : 'block';
+    if(btn.dataset.tab === 'allsales' && !allsalesInited){ initAllSales(); }
+    if(btn.dataset.tab === 'allreturns' && !allreturnsInited){ initReturnsAll(); }
+    if(btn.dataset.tab === 'ledger' && !ledgerInited){ initLedger(); }
+  });
+});
+
+let allDates, MIN_DATE, MAX_DATE, fromInput, toInput, chanSelect, seriesSelect;
+
+function setupFilters(){
+  fromInput = document.getElementById('dateFrom');
+  toInput = document.getElementById('dateTo');
+  allDates = ROWS.map(r=>r.d).sort();
+  MIN_DATE = allDates[0]; MAX_DATE = allDates[allDates.length-1];
+  document.getElementById('genDate').textContent = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+
+  fromInput.min = MIN_DATE; fromInput.max = MAX_DATE;
+  toInput.min = MIN_DATE; toInput.max = MAX_DATE;
+  fromInput.value = MIN_DATE; toInput.value = MAX_DATE;
+  fromInput.addEventListener('change', ()=>{ setActiveQuick(null); applyDateFilter(); });
+  toInput.addEventListener('change', ()=>{ setActiveQuick(null); applyDateFilter(); });
+
+  chanSelect = document.getElementById('searchChannel');
+  const channelSet = [...new Set(ROWS.map(r=>r.st))].sort();
+  channelSet.forEach(c=>{
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    chanSelect.appendChild(opt);
+  });
+  chanSelect.addEventListener('change', runSearch);
+
+  seriesSelect = document.getElementById('searchSeries');
+  const seriesSet = [...new Set(ROWS.map(r=>r.docsrscd))].sort();
+  seriesSet.forEach(s=>{
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    seriesSelect.appendChild(opt);
+  });
+  seriesSelect.addEventListener('change', runSearch);
+
+  document.getElementById('quickBtns').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.qbtn');
+    if(!btn) return;
+    const range = btn.dataset.range;
+    setActiveQuick(range);
+    const dates = allDates;
+    if(range==='all'){ fromInput.value = MIN_DATE; toInput.value = MAX_DATE; }
+    else if(range==='7'){
+      const maxD = new Date(MAX_DATE+'T00:00:00');
+      const fromD = new Date(maxD); fromD.setDate(fromD.getDate()-6);
+      fromInput.value = fromD.toISOString().slice(0,10); toInput.value = MAX_DATE;
+    } else if(range==='wk1'){
+      fromInput.value = dates[0]; toInput.value = dates[Math.min(6,dates.length-1)];
+    } else if(range==='wk2'){
+      fromInput.value = dates[Math.min(7,dates.length-1)]; toInput.value = dates[Math.min(13,dates.length-1)];
+    } else if(range==='wk3'){
+      fromInput.value = dates[Math.min(14,dates.length-1)]; toInput.value = MAX_DATE;
+    }
+    applyDateFilter();
+  });
+
+  document.getElementById('searchBox').addEventListener('input', runSearch);
+}
+
+/* ---------------- chart instances ---------------- */
+let channelChart, locationChart, trendChart;
+const palette = ['#161d2b','#b8863b','#2c5f5a','#a8432f','#7d6d4f','#4d6a86','#8d8874','#d1447b','#3f7ca6','#8259a3'];
+
+/* ---------------- core aggregation ---------------- */
+function aggregate(rows){
+  const kpi = { gross:0, base:0, qty:0, txns:new Set(), locs:new Set(), custs:new Set() };
+  const byChannel = {}, byLoc = {}, byItem = {}, byCust = {}, byDay = {};
+
+  rows.forEach(r=>{
+    kpi.gross += r.g; kpi.base += r.b; kpi.qty += r.q;
+    kpi.txns.add(r.tx); kpi.locs.add(r.l); kpi.custs.add(r.c);
+
+    (byChannel[r.st] ??= {v:0,q:0,tx:new Set()});
+    byChannel[r.st].v += r.g; byChannel[r.st].q += r.q; byChannel[r.st].tx.add(r.tx);
+
+    (byLoc[r.l] ??= {v:0,q:0,tx:new Set()});
+    byLoc[r.l].v += r.g; byLoc[r.l].q += r.q; byLoc[r.l].tx.add(r.tx);
+
+    (byItem[r.it] ??= {v:0,q:0});
+    byItem[r.it].v += r.g; byItem[r.it].q += r.q;
+
+    (byCust[r.c] ??= {v:0,q:0,tx:new Set()});
+    byCust[r.c].v += r.g; byCust[r.c].q += r.q; byCust[r.c].tx.add(r.tx);
+
+    (byDay[r.d] ??= {v:0,tx:new Set()});
+    byDay[r.d].v += r.g; byDay[r.d].tx.add(r.tx);
+  });
+
+  const totalGross = kpi.gross || 1;
+  const channelArr = Object.entries(byChannel).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q, Txns:v.tx.size, Share:v.v/totalGross*100})).sort((a,b)=>b.GRVAL-a.GRVAL);
+  const locArr = Object.entries(byLoc).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q, Txns:v.tx.size, Share:v.v/totalGross*100})).sort((a,b)=>b.GRVAL-a.GRVAL);
+  const itemArr = Object.entries(byItem).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q})).sort((a,b)=>b.GRVAL-a.GRVAL).slice(0,10);
+  const custArr = Object.entries(byCust).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q, Txns:v.tx.size})).sort((a,b)=>b.GRVAL-a.GRVAL).slice(0,10);
+  const dayArr = Object.entries(byDay).map(([k,v])=>({date:k, GRVAL:v.v, Txns:v.tx.size})).sort((a,b)=>a.date.localeCompare(b.date));
+
+  return {
+    kpi: { gross:kpi.gross, qty:kpi.qty, txns:kpi.txns.size, locs:kpi.locs.size, custs:kpi.custs.size,
+           avg: kpi.txns.size? kpi.gross/kpi.txns.size : 0, base: kpi.base },
+    channel: channelArr, location: locArr, items: itemArr, customers: custArr, daily: dayArr
+  };
+}
+
+/* ---------------- render ---------------- */
+function renderAll(rows, retRows){
+  retRows = retRows || [];
+  const agg = aggregate(rows);
+  const retAgg = aggregateReturns(retRows);
+  const retChanMap = {}; retAgg.channel.forEach(c=>{ retChanMap[c.name] = c; });
+  const retLocMap = {}; retAgg.location.forEach(l=>{ retLocMap[l.name] = l; });
+
+  document.getElementById('kpiGross').innerHTML = '₹' + cr(agg.kpi.gross);
+  document.getElementById('kpiBase').innerHTML = '₹' + cr(agg.kpi.base);
+  document.getElementById('kpiQty').innerHTML = num(agg.kpi.qty);
+  document.getElementById('kpiTxns').innerHTML = num(agg.kpi.txns);
+  document.getElementById('kpiAvg').innerHTML = inr(agg.kpi.avg);
+  document.getElementById('resultNote').textContent = num(rows.length) + ' line items · ' + num(agg.kpi.txns) + ' invoices · ' + agg.kpi.locs + ' locations';
+
+  // channel table (full) — merged with returns
+  const chBody = document.getElementById('channelTableFull');
+  chBody.innerHTML = '';
+  agg.channel.forEach((row,i)=>{
+    const r = retChanMap[row.name];
+    const retVal = r? r.GRVAL : 0, retQty = r? r.Qty : 0;
+    const netVal = row.GRVAL - retVal;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rank">${i+1}</td><td>${row.name}</td><td class="num">${inr(row.GRVAL)}</td><td class="num">${num(row.Qty)}</td><td class="num">${num(row.Txns)}</td>
+      <td class="num"${retVal>0?' style="color:var(--red);"':''}>${retVal>0? inr(retVal) : '—'}</td><td class="num">${retQty>0? num(retQty) : '—'}</td>
+      <td class="num" style="font-weight:600;">${inr(netVal)}</td><td class="num">${row.Share.toFixed(2)}%</td>`;
+    chBody.appendChild(tr);
+  });
+
+  // location table (full) — merged with returns
+  const locBody = document.getElementById('locationTableFull');
+  locBody.innerHTML = '';
+  const maxLocShare = Math.max(...agg.location.map(l=>l.Share), 1);
+  agg.location.forEach((row,i)=>{
+    const r = retLocMap[row.name];
+    const retVal = r? r.GRVAL : 0, retQty = r? r.Qty : 0;
+    const netVal = row.GRVAL - retVal;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rank">${i+1}</td><td>${row.name}</td><td class="num">${inr(row.GRVAL)}</td><td class="num">${num(row.Qty)}</td><td class="num">${num(row.Txns)}</td>
+      <td class="num"${retVal>0?' style="color:var(--red);"':''}>${retVal>0? inr(retVal) : '—'}</td><td class="num">${retQty>0? num(retQty) : '—'}</td>
+      <td class="num" style="font-weight:600;">${inr(netVal)}</td>
+      <td><div class="bar-track"><div class="bar-fill" style="width:${(row.Share/maxLocShare*100).toFixed(0)}%"></div></div></td>`;
+    locBody.appendChild(tr);
+  });
+
+  // items
+  const itemBody = document.getElementById('itemTable');
+  itemBody.innerHTML = '';
+  agg.items.forEach((row,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rank">${i+1}</td><td><span class="name-trunc" title="${row.name}">${row.name}</span></td><td class="num">${inr(row.GRVAL)}</td><td class="num">${num(row.Qty)}</td>`;
+    itemBody.appendChild(tr);
+  });
+
+  // customers
+  const custBody = document.getElementById('custTable');
+  custBody.innerHTML = '';
+  agg.customers.forEach((row,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rank">${i+1}</td><td><span class="name-trunc" title="${row.name}">${row.name}</span></td><td class="num">${inr(row.GRVAL)}</td><td class="num">${row.Txns}</td>`;
+    custBody.appendChild(tr);
+  });
+
+  // channel donut
+  const top6 = agg.channel.slice(0,6);
+  const othersVal = agg.channel.slice(6).reduce((a,b)=>a+b.GRVAL,0);
+  const labels = top6.map(r=>r.name).concat(othersVal>0?['Others']:[]);
+  const values = top6.map(r=>r.GRVAL).concat(othersVal>0?[othersVal]:[]);
+
+  if(channelChart) channelChart.destroy();
+  channelChart = new Chart(document.getElementById('channelChart'), {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data: values, backgroundColor: palette, borderColor:'#fff', borderWidth:2 }] },
+    options:{
+      plugins:{
+        legend:{ position:'bottom', labels:{ font:{family:'Inter', size:11}, boxWidth:11, padding:10 } },
+        tooltip:{ callbacks:{ label:(ctx)=> ctx.label + ': ' + inr(ctx.parsed) } }
+      },
+      cutout:'60%'
+    }
+  });
+
+  // location bar chart (top 12)
+  const topLoc = agg.location.slice(0,12);
+  if(locationChart) locationChart.destroy();
+  locationChart = new Chart(document.getElementById('locationChart'), {
+    type:'bar',
+    data:{
+      labels: topLoc.map(r=>r.name),
+      datasets:[{ label:'Gross Value', data: topLoc.map(r=>r.GRVAL), backgroundColor:'#2c5f5a', borderRadius:3 }]
+    },
+    options:{
+      indexAxis:'y',
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:(ctx)=> inr(ctx.parsed.x) } } },
+      scales:{ x:{ ticks:{ callback:(v)=>'₹'+cr(v) }, grid:{ color:'#eee9db' } }, y:{ grid:{ display:false } } }
+    }
+  });
+
+  // trend chart
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    data:{
+      labels: agg.daily.map(r=>fmtDate(r.date)),
+      datasets:[
+        { type:'bar', label:'Invoices', data: agg.daily.map(r=>r.Txns), backgroundColor:'#e4ecea', yAxisID:'y1', borderRadius:2, barPercentage:0.55 },
+        { type:'line', label:'Gross Value (₹)', data: agg.daily.map(r=>r.GRVAL), borderColor:'#b8863b', backgroundColor:'#b8863b', tension:.3, yAxisID:'y', pointRadius:3, pointBackgroundColor:'#161d2b', borderWidth:2.5 }
+      ]
+    },
+    options:{
+      interaction:{ mode:'index', intersect:false },
+      scales:{
+        y:{ position:'left', ticks:{ callback:(v)=> '₹'+cr(v) }, grid:{ color:'#eee9db' } },
+        y1:{ position:'right', grid:{ display:false } }
+      },
+      plugins:{
+        legend:{ position:'top', align:'end', labels:{ font:{family:'Inter', size:12} } },
+        tooltip:{ callbacks:{ label:(ctx)=> ctx.dataset.label.includes('Value') ? ' '+inr(ctx.parsed.y) : ' '+ctx.parsed.y+' invoices' } }
+      }
+    }
+  });
+}
+
+/* ---------------- returns aggregation + render ---------------- */
+let retReasonChart;
+function aggregateReturns(rows){
+  const kpi = { gross:0, base:0, qty:0, txns:new Set() };
+  const byReason = {}, byItem = {}, byLoc = {}, byChannel = {};
+  rows.forEach(r=>{
+    kpi.gross += r.g; kpi.base += r.b; kpi.qty += r.q; kpi.txns.add(r.tx);
+    (byReason[r.reason] ??= {v:0,q:0,tx:new Set()});
+    byReason[r.reason].v += r.g; byReason[r.reason].q += r.q; byReason[r.reason].tx.add(r.tx);
+    (byItem[r.it] ??= {v:0,q:0});
+    byItem[r.it].v += r.g; byItem[r.it].q += r.q;
+    (byLoc[r.l] ??= {v:0,q:0,tx:new Set()});
+    byLoc[r.l].v += r.g; byLoc[r.l].q += r.q; byLoc[r.l].tx.add(r.tx);
+    (byChannel[r.st] ??= {v:0,q:0,tx:new Set()});
+    byChannel[r.st].v += r.g; byChannel[r.st].q += r.q; byChannel[r.st].tx.add(r.tx);
+  });
+  const totalGross = kpi.gross || 1;
+  const reasonArr = Object.entries(byReason).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q, Txns:v.tx.size, Share:v.v/totalGross*100})).sort((a,b)=>b.GRVAL-a.GRVAL);
+  const itemArr = Object.entries(byItem).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q})).sort((a,b)=>b.GRVAL-a.GRVAL).slice(0,10);
+  const locArr = Object.entries(byLoc).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q, Txns:v.tx.size})).sort((a,b)=>b.GRVAL-a.GRVAL);
+  const chanArr = Object.entries(byChannel).map(([k,v])=>({name:k, GRVAL:v.v, Qty:v.q, Txns:v.tx.size})).sort((a,b)=>b.GRVAL-a.GRVAL);
+  return {
+    kpi: { gross:kpi.gross, base:kpi.base, qty:kpi.qty, txns:kpi.txns.size,
+           avg: kpi.txns.size? kpi.gross/kpi.txns.size : 0 },
+    reason: reasonArr, items: itemArr, location: locArr, channel: chanArr
+  };
+}
+function renderReturns(rows){
+  const agg = aggregateReturns(rows);
+  document.getElementById('retKpiGross').innerHTML = '₹' + cr(agg.kpi.gross);
+  document.getElementById('retKpiBase').innerHTML = '₹' + cr(agg.kpi.base);
+  document.getElementById('retKpiQty').innerHTML = num(agg.kpi.qty);
+  document.getElementById('retKpiTxns').innerHTML = num(agg.kpi.txns);
+  document.getElementById('retKpiAvg').innerHTML = inr(agg.kpi.avg);
+
+  const reasonBody = document.getElementById('retReasonTable');
+  reasonBody.innerHTML = '';
+  agg.reason.forEach((row,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rank">${i+1}</td><td>${row.name}</td><td class="num">${inr(row.GRVAL)}</td><td class="num">${num(row.Qty)}</td><td class="num">${row.Txns}</td><td class="num">${row.Share.toFixed(2)}%</td>`;
+    reasonBody.appendChild(tr);
+  });
+
+  const itemBody = document.getElementById('retItemTable');
+  itemBody.innerHTML = '';
+  agg.items.forEach((row,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rank">${i+1}</td><td><span class="name-trunc" title="${row.name}">${row.name}</span></td><td class="num">${inr(row.GRVAL)}</td><td class="num">${num(row.Qty)}</td>`;
+    itemBody.appendChild(tr);
+  });
+
+  // location aggregation (agg.location) is reused in the Locations tab merge — no direct DOM here anymore.
+
+  if(retReasonChart) retReasonChart.destroy();
+  retReasonChart = new Chart(document.getElementById('retReasonChart'), {
+    type:'doughnut',
+    data:{ labels: agg.reason.map(r=>r.name), datasets:[{ data: agg.reason.map(r=>r.GRVAL), backgroundColor: ['#c1512e','#b8863b','#2c5f5a','#7d6d4f','#8259a3','#4d6a86'], borderColor:'#fff', borderWidth:2 }] },
+    options:{
+      plugins:{
+        legend:{ position:'bottom', labels:{ font:{family:'Inter', size:11}, boxWidth:11, padding:10 } },
+        tooltip:{ callbacks:{ label:(ctx)=> ctx.label + ': ' + inr(ctx.parsed) } }
+      },
+      cutout:'60%'
+    }
+  });
+}
+
+
+function getFilteredRows(){
+  const from = fromInput.value || MIN_DATE;
+  const to = toInput.value || MAX_DATE;
+  return ROWS.filter(r=> r.d >= from && r.d <= to);
+}
+function getFilteredReturnRows(){
+  const from = fromInput.value || MIN_DATE;
+  const to = toInput.value || MAX_DATE;
+  return RETURN_ROWS.filter(r=> r.d >= from && r.d <= to);
+}
+function applyDateFilter(){
+  const rows = getFilteredRows();
+  const retRows = getFilteredReturnRows();
+  renderAll(rows, retRows);
+  renderReturns(retRows);
+  const grossTotal = rows.reduce((a,r)=>a+r.g,0);
+  const retTotal = retRows.reduce((a,r)=>a+r.g,0);
+  document.getElementById('kpiRetVal').innerHTML = '₹' + cr(retTotal);
+  document.getElementById('kpiRetRate').innerHTML = grossTotal? (retTotal/grossTotal*100).toFixed(2)+'%' : '0%';
+  document.getElementById('kpiNetSales').innerHTML = '₹' + cr(grossTotal - retTotal);
+  runSearch();
+}
+function setActiveQuick(key){
+  document.querySelectorAll('.qbtn').forEach(b=>b.classList.toggle('active', b.dataset.range===key));
+}
+
+/* ---------------- customised search ---------------- */
+const searchBox = document.getElementById('searchBox');
+const searchTable = document.getElementById('searchTable');
+const searchMeta = document.getElementById('searchMeta');
+const searchEmpty = document.getElementById('searchEmpty');
+const RENDER_LIMIT = 300;
+
+function runSearch(){
+  const q = searchBox.value.trim().toLowerCase();
+  const chanFilter = chanSelect.value;
+  const seriesFilter = seriesSelect.value;
+  const base = getFilteredRows();
+  const filtered = base.filter(r=>{
+    if(chanFilter && r.st !== chanFilter) return false;
+    if(seriesFilter && r.docsrscd !== seriesFilter) return false;
+    if(!q) return true;
+    return (r.it.toLowerCase().includes(q) || r.c.toLowerCase().includes(q) || r.l.toLowerCase().includes(q) ||
+            r.st.toLowerCase().includes(q) || r.stc.toLowerCase().includes(q) || r.po.toLowerCase().includes(q) ||
+            r.tx.toLowerCase().includes(q) || r.d.includes(q) ||
+            String(r.docsrscd).toLowerCase().includes(q) || String(r.itemcd).toLowerCase().includes(q) ||
+            String(r.custcd).toLowerCase().includes(q) || String(r.btrefno).toLowerCase().includes(q) ||
+            String(r.igpid).toLowerCase().includes(q));
+  });
+
+  searchMeta.textContent = num(filtered.length) + ' rows' + (filtered.length>RENDER_LIMIT? ' (showing first '+RENDER_LIMIT+')' : '');
+  searchTable.innerHTML = '';
+  if(filtered.length===0){
+    searchEmpty.style.display='block';
+  } else {
+    searchEmpty.style.display='none';
+    filtered.slice(0,RENDER_LIMIT).forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${fmtDate(r.d)}</td><td>${r.l}</td><td><span class="name-trunc" title="${r.stc}">${r.stc}</span></td><td>${r.custcd}</td><td>${r.st}</td><td>${r.docsrscd}</td>
+        <td><span class="name-trunc" title="${r.it}">${r.it}</span></td><td>${r.itemcd}</td><td><span class="name-trunc" title="${r.c}">${r.c}</span></td>
+        <td class="num">${num(r.q)}</td><td class="num">${inr(r.g)}</td><td>${r.po}</td><td>${r.btrefno}</td><td>${r.igpid}</td><td>${r.tx}</td>`;
+      searchTable.appendChild(tr);
+    });
+  }
+}
+
+/* ---------------- All Sales Report tab (full raw data, unfiltered) ---------------- */
+let allsalesInited = false;
+let asPage = 1;
+const asPageSize = 100;
+let asTotalPages = 1;
+
+function initAllSales(){
+  allsalesInited = true;
+  asTotalPages = Math.max(1, Math.ceil(RAW.length / asPageSize));
+  const head = document.getElementById('allsalesHead');
+  head.innerHTML = COLS.map(c=>`<th>${c}</th>`).join('');
+  document.getElementById('allsalesInfo').textContent = num(RAW.length) + ' rows × ' + COLS.length + ' columns — exact export of the source file, unaffected by the date filter above.';
+  renderAllSalesPage();
+}
+function renderAllSalesPage(){
+  const body = document.getElementById('allsalesBody');
+  const start = (asPage-1)*asPageSize;
+  const end = Math.min(start+asPageSize, RAW.length);
+  let html = '';
+  for(let i=start; i<end; i++){
+    const row = RAW[i];
+    html += '<tr>' + row.map(v=>{
+      const isNum = typeof v === 'number';
+      return `<td${isNum?' class="num"':''}>${isNum ? (Number.isInteger(v)? num(v) : v.toLocaleString('en-IN',{maximumFractionDigits:2})) : v}</td>`;
+    }).join('') + '</tr>';
+  }
+  body.innerHTML = html;
+  document.getElementById('pagerInfo').textContent = `Page ${asPage} of ${asTotalPages} · rows ${num(start+1)}–${num(end)} of ${num(RAW.length)}`;
+  document.getElementById('pagerFirst').disabled = asPage===1;
+  document.getElementById('pagerPrev').disabled = asPage===1;
+  document.getElementById('pagerNext').disabled = asPage===asTotalPages;
+  document.getElementById('pagerLast').disabled = asPage===asTotalPages;
+}
+document.getElementById('pagerFirst').addEventListener('click', ()=>{ asPage=1; renderAllSalesPage(); });
+document.getElementById('pagerPrev').addEventListener('click', ()=>{ if(asPage>1){asPage--; renderAllSalesPage();} });
+document.getElementById('pagerNext').addEventListener('click', ()=>{ if(asPage<asTotalPages){asPage++; renderAllSalesPage();} });
+document.getElementById('pagerLast').addEventListener('click', ()=>{ asPage=asTotalPages; renderAllSalesPage(); });
+
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  const aoa = [COLS, ...RAW];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales Report');
+  XLSX.writeFile(wb, 'Sales_Report_Full_Data.xlsx');
+});
+
+/* ---------------- All Returns Report tab (full raw data, unfiltered) ---------------- */
+let allreturnsInited = false;
+let rsPage = 1;
+const rsPageSize = 100;
+let rsTotalPages = 1;
+
+function initReturnsAll(){
+  allreturnsInited = true;
+  rsTotalPages = Math.max(1, Math.ceil(RET_RAW.length / rsPageSize));
+  const head = document.getElementById('retAllHead');
+  head.innerHTML = RET_COLS.map(c=>`<th>${c}</th>`).join('');
+  document.getElementById('retAllInfo').textContent = num(RET_RAW.length) + ' rows × ' + RET_COLS.length + ' columns — exact export of the source file, unaffected by the date filter above.';
+  renderReturnsAllPage();
+}
+function renderReturnsAllPage(){
+  const body = document.getElementById('retAllBody');
+  const start = (rsPage-1)*rsPageSize;
+  const end = Math.min(start+rsPageSize, RET_RAW.length);
+  let html = '';
+  for(let i=start; i<end; i++){
+    const row = RET_RAW[i];
+    html += '<tr>' + row.map(v=>{
+      const isNum = typeof v === 'number';
+      return `<td${isNum?' class="num"':''}>${isNum ? (Number.isInteger(v)? num(v) : v.toLocaleString('en-IN',{maximumFractionDigits:2})) : v}</td>`;
+    }).join('') + '</tr>';
+  }
+  body.innerHTML = html;
+  document.getElementById('retPagerInfo').textContent = `Page ${rsPage} of ${rsTotalPages} · rows ${num(start+1)}–${num(end)} of ${num(RET_RAW.length)}`;
+  document.getElementById('retPagerFirst').disabled = rsPage===1;
+  document.getElementById('retPagerPrev').disabled = rsPage===1;
+  document.getElementById('retPagerNext').disabled = rsPage===rsTotalPages;
+  document.getElementById('retPagerLast').disabled = rsPage===rsTotalPages;
+}
+document.getElementById('retPagerFirst').addEventListener('click', ()=>{ rsPage=1; renderReturnsAllPage(); });
+document.getElementById('retPagerPrev').addEventListener('click', ()=>{ if(rsPage>1){rsPage--; renderReturnsAllPage();} });
+document.getElementById('retPagerNext').addEventListener('click', ()=>{ if(rsPage<rsTotalPages){rsPage++; renderReturnsAllPage();} });
+document.getElementById('retPagerLast').addEventListener('click', ()=>{ rsPage=rsTotalPages; renderReturnsAllPage(); });
+
+document.getElementById('retDownloadBtn').addEventListener('click', ()=>{
+  const aoa = [RET_COLS, ...RET_RAW];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales Returns');
+  XLSX.writeFile(wb, 'Sales_Return_Report_Full_Data.xlsx');
+});
+
+/* ---------------- Customer Ledger tab (unified Sales + Sales Return) ---------------- */
+let ledgerInited = false;
+let ledPage = 1;
+const ledPageSize = 100;
+// LEDGER_ROWS assigned during data load (flat array: {loc,store,styp,sdate,pono,igpid,custcd,custname,sval,rdate,sigpid,dfigpid,rval})
+let ledActiveFilter = 'all';
+
+function initLedger(){
+  ledgerInited = true;
+  document.getElementById('ledgerSearch').addEventListener('input', ()=>{ ledPage=1; renderLedgerTable(); });
+  document.getElementById('ledFirst').addEventListener('click', ()=>{ ledPage=1; renderLedgerTable(); });
+  document.getElementById('ledPrev').addEventListener('click', ()=>{ if(ledPage>1){ledPage--; renderLedgerTable();} });
+  document.getElementById('ledNext').addEventListener('click', ()=>{ ledPage++; renderLedgerTable(); });
+  document.getElementById('ledLast').addEventListener('click', ()=>{ ledPage=999999; renderLedgerTable(); });
+  document.querySelectorAll('[data-ledfilter]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-ledfilter]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      ledActiveFilter = btn.dataset.ledfilter;
+      ledPage = 1;
+      renderLedgerTable();
+    });
+  });
+  document.getElementById('ledgerDownloadBtn').addEventListener('click', ()=>{
+    const rows = getLedgerFiltered();
+    const headers = ['LOCCD','STORECD','Sales Type','Sale Date','Po No','IGPID','CUSTCD','CUSTNAME','Sale GRVAL','Return Date','SIGPID','DFIGPID','Return GRVAL'];
+    const aoa = [headers, ...rows.map(r=>[r.loc,r.store,r.styp,r.sdate,r.pono,r.igpid,r.custcd,r.custname,r.sval,r.rdate,r.sigpid,r.dfigpid,r.rval])];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Combined Ledger');
+    XLSX.writeFile(wb, 'Sales_SalesReturn_Combined_Ledger.xlsx');
+  });
+  renderLedgerTable();
+}
+
+function getLedgerFiltered(){
+  const q = document.getElementById('ledgerSearch').value.trim().toLowerCase();
+  let rows = LEDGER_ROWS;
+  if(ledActiveFilter === 'withret') rows = rows.filter(r=>r.rval > 0);
+  else if(ledActiveFilter === 'noret') rows = rows.filter(r=>!(r.rval > 0));
+  if(q){
+    rows = rows.filter(r =>
+      String(r.custname).toLowerCase().includes(q) || String(r.custcd).toLowerCase().includes(q) ||
+      String(r.igpid).toLowerCase().includes(q) || String(r.dfigpid).toLowerCase().includes(q) ||
+      String(r.sigpid).toLowerCase().includes(q) || String(r.pono).toLowerCase().includes(q) ||
+      String(r.loc).toLowerCase().includes(q)
+    );
+  }
+  return rows;
+}
+
+function renderLedgerTable(){
+  const filtered = getLedgerFiltered();
+
+  const totalSaleVal = filtered.reduce((a,r)=>a+r.sval,0);
+  const totalRetVal = filtered.reduce((a,r)=>a+r.rval,0);
+  const invCount = filtered.filter(r=>r.sval>0).length;
+  const linkedCount = filtered.filter(r=>r.rval>0 && r.sval>0).length;
+
+  document.getElementById('ledKpiInvCount').innerHTML = num(invCount);
+  document.getElementById('ledKpiTotal').innerHTML = '₹' + cr(totalSaleVal);
+  document.getElementById('ledKpiLinked').innerHTML = num(linkedCount);
+  document.getElementById('ledKpiRetTotal').innerHTML = '₹' + cr(totalRetVal);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ledPageSize));
+  if(ledPage > totalPages) ledPage = totalPages;
+  const start = (ledPage-1)*ledPageSize;
+  const end = Math.min(start+ledPageSize, filtered.length);
+
+  const body = document.getElementById('ledgerTable');
+  body.innerHTML = '';
+  for(let i=start; i<end; i++){
+    const r = filtered[i];
+    const hasReturn = r.rval > 0;
+    const tr = document.createElement('tr');
+    if(hasReturn) tr.style.background = '#fdf6f3';
+    tr.innerHTML =
+      `<td>${r.loc||'—'}</td><td>${r.store||'—'}</td><td>${r.styp||'—'}</td><td>${r.sdate? fmtDate(r.sdate):'—'}</td>` +
+      `<td>${r.pono||'—'}</td><td>${r.igpid||'—'}</td><td>${r.custcd||'—'}</td><td><span class="name-trunc" title="${r.custname||''}">${r.custname||'—'}</span></td>` +
+      `<td class="num">${r.sval>0? inr(r.sval) : '—'}</td>` +
+      `<td>${r.rdate? fmtDate(r.rdate):'—'}</td><td>${r.sigpid||'—'}</td><td>${r.dfigpid||'—'}</td>` +
+      `<td class="num"${hasReturn?' style="color:var(--red); font-weight:600;"':''}>${r.rval>0? inr(r.rval) : '—'}</td>`;
+    body.appendChild(tr);
+  }
+  document.getElementById('ledInfo').textContent = `Page ${ledPage} of ${totalPages} · ${num(filtered.length)} rows`;
+  document.getElementById('ledFirst').disabled = ledPage===1;
+  document.getElementById('ledPrev').disabled = ledPage===1;
+  document.getElementById('ledNext').disabled = ledPage===totalPages;
+  document.getElementById('ledLast').disabled = ledPage===totalPages;
+}
+
+/* ---------------- data loading (fetches JSON from ./data/ folder) ---------------- */
+async function loadJSON(path){
+  const res = await fetch(path, {cache:'no-store'});
+  if(!res.ok) throw new Error('Failed to load ' + path + ' (HTTP ' + res.status + ')');
+  return await res.json();
+}
+
+async function init(){
+  try{
+    document.getElementById('loadMsg').textContent = 'Loading sales data…';
+    [FULL, RET_FULL, LEDGER] = await Promise.all([
+      loadJSON('./data/sales_data.json'),
+      loadJSON('./data/return_data.json'),
+      loadJSON('./data/ledger_data.json')
+    ]);
+
+    COLS = FULL.cols; RAW = FULL.rows;
+    RET_COLS = RET_FULL.cols; RET_RAW = RET_FULL.rows;
+
+    I = {
+      loc: idx('LOCNAME'), store: idx('STORENAME'), dt: idx('TXDT'), item: idx('ITEMNAME'),
+      cust: idx('CUSTNAME'), qty: idx('SALEQTY'), gr: idx('GRVAL'), bs: idx('BSVAL'),
+      po: idx('Po No'), tx: idx('TXID'), stype: idx('Sales Type'),
+      docsrscd: idx('DOCSRSCD'), itemcd: idx('ITEMCD'), custcd: idx('CUSTCD'),
+      btrefno: idx('BTREFNO'), igpid: idx('IGPID')
+    };
+    ROWS = RAW.map(r => ({
+      d: r[I.dt], l: cleanLoc(r[I.loc]), st: r[I.stype], it: r[I.item], c: r[I.cust],
+      stc: r[I.store], q: r[I.qty], g: r[I.gr], b: r[I.bs], po: String(r[I.po]), tx: r[I.tx],
+      docsrscd: r[I.docsrscd], itemcd: r[I.itemcd], custcd: r[I.custcd],
+      btrefno: r[I.btrefno], igpid: r[I.igpid]
+    }));
+
+    RI = {
+      loc: ridx('LOCNAME'), dt: ridx('TXDT'), cust: ridx('CUSTNAME'), item: ridx('ITEMNAME'),
+      qty: ridx('RETQTY'), gr: ridx('GRVAL'), bs: ridx('BSVAL'), tx: ridx('TXID'),
+      reason: ridx('DFSLRTRSCD'), btrefno: ridx('BTREFNO'), stype: ridx('Sales Type')
+    };
+    RETURN_ROWS = RET_RAW.map(r => ({
+      d: r[RI.dt], l: cleanLoc(r[RI.loc]), c: r[RI.cust], it: r[RI.item],
+      q: r[RI.qty], g: r[RI.gr], b: r[RI.bs], tx: r[RI.tx], reason: r[RI.reason] || 'Unspecified',
+      st: r[RI.stype] || 'Unspecified'
+    }));
+
+    LEDGER_ROWS = LEDGER;
+
+    setupFilters();
+    renderAll(ROWS, RETURN_ROWS);
+    renderReturns(RETURN_ROWS);
+    (function initReturnsKpi(){
+      const grossTotal = ROWS.reduce((a,r)=>a+r.g,0);
+      const retTotal = RETURN_ROWS.reduce((a,r)=>a+r.g,0);
+      document.getElementById('kpiRetVal').innerHTML = '₹' + cr(retTotal);
+      document.getElementById('kpiRetRate').innerHTML = grossTotal? (retTotal/grossTotal*100).toFixed(2)+'%' : '0%';
+      document.getElementById('kpiNetSales').innerHTML = '₹' + cr(grossTotal - retTotal);
+    })();
+    runSearch();
+
+    document.getElementById('loadOverlay').style.display = 'none';
+  } catch(err){
+    document.getElementById('loadMsg').innerHTML =
+      '⚠️ Could not load data.<br><span style="font-size:11px; opacity:.8;">' + err.message +
+      '<br><br>Make sure sales_data.json, return_data.json and ledger_data.json exist inside a <b>data/</b> folder next to this HTML file, and that the site is served over http(s) — opening the file directly (file://) will not work.</span>';
+  }
+}
+init();
+</script>
+
+</body>
+</html>
