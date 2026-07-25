@@ -245,8 +245,9 @@
 <div class="masthead">
   <div class="masthead-top">
     <div>
-      <p class="eyebrow">BEIERSDORF INDIA PVT. LTD.</p>
-      <h1 class="title">Sales & Return Dashboard</h1>
+      <p class="eyebrow">Secondary Sales · Distribution Ledger</p>
+      <h1 class="title">Sales Report</h1>
+      <p class="subtitle">Line-item invoice register across all channels, locations and stockists.</p>
     </div>
     <div class="masthead-meta">
       <div>Prepared for <b>Business Review</b></div>
@@ -298,11 +299,10 @@
       <input type="date" id="dateTo">
     </div>
     <div class="quick-btns" id="quickBtns">
-      <button class="qbtn active" data-range="all">Full period</button>
-      <button class="qbtn" data-range="7">Last 7 days</button>
-      <button class="qbtn" data-range="wk1">Week 1</button>
-      <button class="qbtn" data-range="wk2">Week 2</button>
-      <button class="qbtn" data-range="wk3">Week 3+</button>
+      <button class="qbtn active" data-range="latest">Latest month</button>
+      <button class="qbtn" data-range="3m">Last 3 months</button>
+      <button class="qbtn" data-range="6m">Last 6 months</button>
+      <button class="qbtn" data-range="all">Full period</button>
     </div>
     <div id="resultNote">—</div>
   </div>
@@ -582,9 +582,10 @@
       <button id="dataToolsClose" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--ink-soft);">×</button>
     </div>
     <p style="font-size:13px; color:var(--ink-soft); line-height:1.5; margin-top:4px;">
-      Upload today's Sales Report and Sales Return Report Excel files here. This generates the three JSON files
-      (sales_data.json, return_data.json, ledger_data.json) directly in your browser — nothing is uploaded anywhere.
-      Download them and replace the matching files inside the <b>data/</b> folder of your GitHub repo.
+      Upload the Sales Report and Sales Return Report Excel files here. This detects which month(s) the data belongs to
+      and generates one JSON file per month, directly in your browser — nothing is uploaded anywhere. It also updates
+      manifest.json (merged with what's already live). Download and place each file in the right <b>data/</b> subfolder
+      on GitHub as instructed below the button.
     </p>
 
     <div style="margin-top:18px;">
@@ -605,12 +606,90 @@
 </div>
 
 <script>
-let FULL, RET_FULL, LEDGER, COLS, RAW, RET_COLS, RET_RAW, I, RI, ROWS, RETURN_ROWS, LEDGER_ROWS;
+let COLS, RET_COLS, I, RI, ROWS, RETURN_ROWS;
+let RAW = [], RET_RAW = [];
 const idx = (name) => COLS.indexOf(name);
 const ridx = (name) => RET_COLS.indexOf(name);
 
+let MANIFEST = { months: [] };
+const salesMonthCache = new Map();   // 'YYYY-MM' -> {cols, rows}
+const returnMonthCache = new Map();  // 'YYYY-MM' -> {cols, rows}
+let allMonthsLoaded = false;
+
 function cleanLoc(s){
   return s.replace('Beiersdorf India Pvt.Ltd. ','').replace('Beiersdorf India Pvt. Ltd. ','').replace('Beiersdorf India Pvt. LTd. ','').replace(/\.$/,'').trim();
+}
+
+async function fetchMonth(kind, month){
+  const path = `./data/${kind}/${month}.json`;
+  const res = await fetch(path, {cache:'no-store'});
+  if(!res.ok) throw new Error(`Missing ${path} (HTTP ${res.status})`);
+  return await res.json();
+}
+
+async function ensureMonthsLoaded(months){
+  const missingSales = months.filter(m => !salesMonthCache.has(m));
+  const missingReturns = months.filter(m => !returnMonthCache.has(m));
+  if(missingSales.length===0 && missingReturns.length===0) return;
+
+  const noteEl = document.getElementById('resultNote');
+  const prevText = noteEl ? noteEl.textContent : '';
+  const label = [...new Set([...missingSales,...missingReturns])].sort().join(', ');
+  if(noteEl) noteEl.textContent = 'Loading ' + label + '…';
+
+  const salesPromises = missingSales.map(m => fetchMonth('sales', m).then(d => ({m,d})));
+  const returnPromises = missingReturns.map(m => fetchMonth('returns', m).then(d => ({m,d})));
+  const [salesResults, returnResults] = await Promise.all([Promise.all(salesPromises), Promise.all(returnPromises)]);
+  salesResults.forEach(({m,d}) => salesMonthCache.set(m, d));
+  returnResults.forEach(({m,d}) => returnMonthCache.set(m, d));
+  rebuildFromCache();
+}
+
+async function ensureAllMonthsLoaded(){
+  if(allMonthsLoaded) return;
+  await ensureMonthsLoaded(MANIFEST.months);
+  allMonthsLoaded = true;
+}
+
+function rebuildFromCache(){
+  const firstSales = salesMonthCache.values().next().value;
+  const firstReturns = returnMonthCache.values().next().value;
+  if(firstSales) COLS = firstSales.cols;
+  if(firstReturns) RET_COLS = firstReturns.cols;
+
+  RAW = [];
+  [...salesMonthCache.keys()].sort().forEach(m => { RAW = RAW.concat(salesMonthCache.get(m).rows); });
+  RET_RAW = [];
+  [...returnMonthCache.keys()].sort().forEach(m => { RET_RAW = RET_RAW.concat(returnMonthCache.get(m).rows); });
+
+  I = {
+    loc: idx('LOCNAME'), store: idx('STORENAME'), dt: idx('TXDT'), item: idx('ITEMNAME'),
+    cust: idx('CUSTNAME'), qty: idx('SALEQTY'), gr: idx('GRVAL'), bs: idx('BSVAL'),
+    po: idx('Po No'), tx: idx('TXID'), stype: idx('Sales Type'),
+    docsrscd: idx('DOCSRSCD'), itemcd: idx('ITEMCD'), custcd: idx('CUSTCD'),
+    btrefno: idx('BTREFNO'), igpid: idx('IGPID')
+  };
+  ROWS = RAW.map(r => ({
+    d: r[I.dt], l: cleanLoc(r[I.loc]), st: r[I.stype], it: r[I.item], c: r[I.cust],
+    stc: r[I.store], q: r[I.qty], g: r[I.gr], b: r[I.bs], po: String(r[I.po]), tx: r[I.tx],
+    docsrscd: r[I.docsrscd], itemcd: r[I.itemcd], custcd: r[I.custcd],
+    btrefno: r[I.btrefno], igpid: r[I.igpid]
+  }));
+
+  if(RET_COLS){
+    RI = {
+      loc: ridx('LOCNAME'), dt: ridx('TXDT'), cust: ridx('CUSTNAME'), item: ridx('ITEMNAME'),
+      qty: ridx('RETQTY'), gr: ridx('GRVAL'), bs: ridx('BSVAL'), tx: ridx('TXID'),
+      reason: ridx('DFSLRTRSCD'), btrefno: ridx('BTREFNO'), stype: ridx('Sales Type')
+    };
+    RETURN_ROWS = RET_RAW.map(r => ({
+      d: r[RI.dt], l: cleanLoc(r[RI.loc]), c: r[RI.cust], it: r[RI.item],
+      q: r[RI.qty], g: r[RI.gr], b: r[RI.bs], tx: r[RI.tx], reason: r[RI.reason] || 'Unspecified',
+      st: r[RI.stype] || 'Unspecified'
+    }));
+  }
+
+  if(chanSelect && seriesSelect) refreshDropdowns();
 }
 
 /* ---------------- formatting helpers ---------------- */
@@ -667,37 +746,48 @@ document.getElementById('innerTabReturnBtn').addEventListener('click', ()=>{
   if(!allreturnsInited){ initReturnsAll(); }
 });
 
-let allDates, MIN_DATE, MAX_DATE, fromInput, toInput, chanSelect, seriesSelect;
+let MIN_DATE, MAX_DATE, fromInput, toInput, chanSelect, seriesSelect;
+
+function monthStart(ym){ return ym + '-01'; }
+function monthEnd(ym){ const [y,m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0,10); }
+function updateDateBounds(){
+  MIN_DATE = monthStart(MANIFEST.months[0]);
+  MAX_DATE = monthEnd(MANIFEST.months[MANIFEST.months.length-1]);
+}
+function monthsBetween(fromStr, toStr){
+  const fromYM = fromStr.slice(0,7), toYM = toStr.slice(0,7);
+  return MANIFEST.months.filter(m => m >= fromYM && m <= toYM);
+}
+
+function refreshDropdowns(){
+  const chanCur = chanSelect.value, seriesCur = seriesSelect.value;
+  const channelSet = [...new Set(ROWS.map(r=>r.st))].sort();
+  chanSelect.innerHTML = '<option value="">All channels</option>' + channelSet.map(c=>`<option value="${c}">${c}</option>`).join('');
+  chanSelect.value = channelSet.includes(chanCur) ? chanCur : '';
+  const seriesSet = [...new Set(ROWS.map(r=>r.docsrscd))].sort();
+  seriesSelect.innerHTML = '<option value="">All series</option>' + seriesSet.map(s=>`<option value="${s}">${s}</option>`).join('');
+  seriesSelect.value = seriesSet.includes(seriesCur) ? seriesCur : '';
+}
 
 function setupFilters(){
   fromInput = document.getElementById('dateFrom');
   toInput = document.getElementById('dateTo');
-  allDates = ROWS.map(r=>r.d).sort();
-  MIN_DATE = allDates[0]; MAX_DATE = allDates[allDates.length-1];
   document.getElementById('genDate').textContent = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
 
   fromInput.min = MIN_DATE; fromInput.max = MAX_DATE;
   toInput.min = MIN_DATE; toInput.max = MAX_DATE;
-  fromInput.value = MIN_DATE; toInput.value = MAX_DATE;
+
+  const latestMonth = MANIFEST.months[MANIFEST.months.length-1];
+  fromInput.value = monthStart(latestMonth);
+  toInput.value = monthEnd(latestMonth);
+
   fromInput.addEventListener('change', ()=>{ setActiveQuick(null); applyDateFilter(); });
   toInput.addEventListener('change', ()=>{ setActiveQuick(null); applyDateFilter(); });
 
   chanSelect = document.getElementById('searchChannel');
-  const channelSet = [...new Set(ROWS.map(r=>r.st))].sort();
-  channelSet.forEach(c=>{
-    const opt = document.createElement('option');
-    opt.value = c; opt.textContent = c;
-    chanSelect.appendChild(opt);
-  });
-  chanSelect.addEventListener('change', runSearch);
-
   seriesSelect = document.getElementById('searchSeries');
-  const seriesSet = [...new Set(ROWS.map(r=>r.docsrscd))].sort();
-  seriesSet.forEach(s=>{
-    const opt = document.createElement('option');
-    opt.value = s; opt.textContent = s;
-    seriesSelect.appendChild(opt);
-  });
+  refreshDropdowns();
+  chanSelect.addEventListener('change', runSearch);
   seriesSelect.addEventListener('change', runSearch);
 
   document.getElementById('quickBtns').addEventListener('click', (e)=>{
@@ -705,18 +795,18 @@ function setupFilters(){
     if(!btn) return;
     const range = btn.dataset.range;
     setActiveQuick(range);
-    const dates = allDates;
-    if(range==='all'){ fromInput.value = MIN_DATE; toInput.value = MAX_DATE; }
-    else if(range==='7'){
-      const maxD = new Date(MAX_DATE+'T00:00:00');
-      const fromD = new Date(maxD); fromD.setDate(fromD.getDate()-6);
-      fromInput.value = fromD.toISOString().slice(0,10); toInput.value = MAX_DATE;
-    } else if(range==='wk1'){
-      fromInput.value = dates[0]; toInput.value = dates[Math.min(6,dates.length-1)];
-    } else if(range==='wk2'){
-      fromInput.value = dates[Math.min(7,dates.length-1)]; toInput.value = dates[Math.min(13,dates.length-1)];
-    } else if(range==='wk3'){
-      fromInput.value = dates[Math.min(14,dates.length-1)]; toInput.value = MAX_DATE;
+    const months = MANIFEST.months;
+    const last = months[months.length-1];
+    if(range==='latest'){
+      fromInput.value = monthStart(last); toInput.value = monthEnd(last);
+    } else if(range==='3m'){
+      const slice = months.slice(-3);
+      fromInput.value = monthStart(slice[0]); toInput.value = monthEnd(last);
+    } else if(range==='6m'){
+      const slice = months.slice(-6);
+      fromInput.value = monthStart(slice[0]); toInput.value = monthEnd(last);
+    } else if(range==='all'){
+      fromInput.value = MIN_DATE; toInput.value = MAX_DATE;
     }
     applyDateFilter();
   });
@@ -976,7 +1066,16 @@ function getFilteredReturnRows(){
   const to = toInput.value || MAX_DATE;
   return RETURN_ROWS.filter(r=> r.d >= from && r.d <= to);
 }
-function applyDateFilter(){
+async function applyDateFilter(){
+  const from = fromInput.value || MIN_DATE;
+  const to = toInput.value || MAX_DATE;
+  const needed = monthsBetween(from, to);
+  try{
+    await ensureMonthsLoaded(needed);
+  } catch(err){
+    document.getElementById('resultNote').textContent = '⚠️ ' + err.message;
+    return;
+  }
   const rows = getFilteredRows();
   const retRows = getFilteredReturnRows();
   renderAll(rows, retRows);
@@ -1040,8 +1139,10 @@ let asPage = 1;
 const asPageSize = 100;
 let asTotalPages = 1;
 
-function initAllSales(){
+async function initAllSales(){
   allsalesInited = true;
+  document.getElementById('allsalesInfo').textContent = 'Loading full dataset…';
+  await ensureAllMonthsLoaded();
   asTotalPages = Math.max(1, Math.ceil(RAW.length / asPageSize));
   const head = document.getElementById('allsalesHead');
   head.innerHTML = COLS.map(c=>`<th>${c}</th>`).join('');
@@ -1086,8 +1187,10 @@ let rsPage = 1;
 const rsPageSize = 100;
 let rsTotalPages = 1;
 
-function initReturnsAll(){
+async function initReturnsAll(){
   allreturnsInited = true;
+  document.getElementById('retAllInfo').textContent = 'Loading full dataset…';
+  await ensureAllMonthsLoaded();
   rsTotalPages = Math.max(1, Math.ceil(RET_RAW.length / rsPageSize));
   const head = document.getElementById('retAllHead');
   head.innerHTML = RET_COLS.map(c=>`<th>${c}</th>`).join('');
@@ -1126,15 +1229,67 @@ document.getElementById('retDownloadBtn').addEventListener('click', ()=>{
   XLSX.writeFile(wb, 'Sales_Return_Report_Full_Data.xlsx');
 });
 
-/* ---------------- Customer Ledger tab (unified Sales + Sales Return) ---------------- */
+/* ---------------- Customer Ledger tab (unified Sales + Sales Return, computed dynamically) ---------------- */
 let ledgerInited = false;
 let ledPage = 1;
 const ledPageSize = 100;
-// LEDGER_ROWS assigned during data load (flat array: {loc,store,styp,sdate,pono,igpid,custcd,custname,sval,rdate,sigpid,dfigpid,rval})
+let LEDGER_ROWS = [];
 let ledActiveFilter = 'all';
 
-function initLedger(){
+function buildLedgerFromLoaded(){
+  const sLOCCD = idx('LOCCD'), sSTORECD = idx('STORECD'), sSTYPE = idx('Sales Type'), sTXDT = idx('TXDT'),
+        sPONO = idx('Po No'), sIGPID = idx('IGPID'), sCUSTCD = idx('CUSTCD'), sCUSTNAME = idx('CUSTNAME'),
+        sGRVAL = idx('GRVAL'), sTXID = idx('TXID');
+  const rDFIGPID = ridx('DFIGPID'), rTXDT = ridx('TXDT'), rSIGPID = ridx('SIGPID'), rGRVAL = ridx('GRVAL');
+
+  const invoices = new Map();
+  RAW.forEach(row=>{
+    const tx = row[sTXID];
+    if(!invoices.has(tx)){
+      invoices.set(tx, { loc: row[sLOCCD], store: row[sSTORECD], styp: row[sSTYPE], sdate: row[sTXDT],
+        pono: String(row[sPONO]), igpid: String(row[sIGPID]).trim(), custcd: row[sCUSTCD], custname: row[sCUSTNAME], sval:0 });
+    }
+    invoices.get(tx).sval += Number(row[sGRVAL])||0;
+  });
+
+  const returns = new Map();
+  RET_RAW.forEach(row=>{
+    const key = String(row[rDFIGPID]).trim();
+    if(!returns.has(key)){
+      returns.set(key, { rdate: row[rTXDT], sigpid: String(row[rSIGPID]).trim(), dfigpid: key, rval:0 });
+    }
+    returns.get(key).rval += Number(row[rGRVAL])||0;
+  });
+
+  const matched = new Set();
+  const records = [];
+  invoices.forEach(inv=>{
+    const rec = { loc:inv.loc, store:inv.store, styp:inv.styp, sdate:inv.sdate, pono:inv.pono, igpid:inv.igpid,
+      custcd:inv.custcd, custname:inv.custname, sval:Math.round(inv.sval*100)/100,
+      rdate:'', sigpid:'', dfigpid:'', rval:0 };
+    if(returns.has(inv.igpid)){
+      const m = returns.get(inv.igpid);
+      rec.rdate = m.rdate; rec.sigpid = m.sigpid; rec.dfigpid = m.dfigpid; rec.rval = Math.round(m.rval*100)/100;
+      matched.add(inv.igpid);
+    }
+    records.push(rec);
+  });
+  returns.forEach((m, key)=>{
+    if(!matched.has(key)){
+      records.push({ loc:'', store:'', styp:'', sdate:'', pono:'', igpid:'',
+        custcd:'', custname:'', sval:0, rdate:m.rdate, sigpid:m.sigpid, dfigpid:m.dfigpid, rval:Math.round(m.rval*100)/100 });
+    }
+  });
+  return records;
+}
+
+async function initLedger(){
   ledgerInited = true;
+  document.getElementById('ledgerNote').textContent = 'Loading full dataset to build the combined ledger…';
+  await ensureAllMonthsLoaded();
+  LEDGER_ROWS = buildLedgerFromLoaded();
+  document.getElementById('ledgerNote').textContent = 'One row per sales invoice. Return columns are filled only where the return record\'s DFIGPID matches that invoice\'s IGPID — real linkage, not estimated.';
+
   document.getElementById('ledgerSearch').addEventListener('input', ()=>{ ledPage=1; renderLedgerTable(); });
   document.getElementById('ledFirst').addEventListener('click', ()=>{ ledPage=1; renderLedgerTable(); });
   document.getElementById('ledPrev').addEventListener('click', ()=>{ if(ledPage>1){ledPage--; renderLedgerTable();} });
@@ -1256,55 +1411,15 @@ function dtDownloadJSON(obj, filename){
   URL.revokeObjectURL(url);
 }
 
-function dtBuildLedger(salesCols, salesRows, retCols, retRows){
-  const sIdx = name => salesCols.indexOf(name);
-  const rIdx = name => retCols.indexOf(name);
-  const S = { txid:sIdx('TXID'), loccd:sIdx('LOCCD'), storecd:sIdx('STORECD'), stype:sIdx('Sales Type'),
-    txdt:sIdx('TXDT'), pono:sIdx('Po No'), igpid:sIdx('IGPID'), custcd:sIdx('CUSTCD'), custname:sIdx('CUSTNAME'), grval:sIdx('GRVAL') };
-  const R = { dfigpid:rIdx('DFIGPID'), txdt:rIdx('TXDT'), sigpid:rIdx('SIGPID'), grval:rIdx('GRVAL'),
-    custcd:rIdx('CUSTCD'), custname:rIdx('CUSTNAME'), loccd:rIdx('LOCCD') };
-
-  const invMap = new Map();
-  salesRows.forEach(row=>{
-    const tx = row[S.txid];
-    if(!invMap.has(tx)){
-      invMap.set(tx, { loc:row[S.loccd], store:row[S.storecd], styp:row[S.stype], sdate:row[S.txdt],
-        pono:String(row[S.pono]), igpid:String(row[S.igpid]).trim(), custcd:row[S.custcd], custname:row[S.custname], sval:0 });
-    }
-    invMap.get(tx).sval += Number(row[S.grval])||0;
+function dtGroupByMonth(cols, rows, dateColName){
+  const dIdx = cols.indexOf(dateColName);
+  const byMonth = new Map();
+  rows.forEach(row=>{
+    const month = String(row[dIdx]).slice(0,7); // YYYY-MM
+    if(!byMonth.has(month)) byMonth.set(month, []);
+    byMonth.get(month).push(row);
   });
-
-  const retMap = new Map();
-  retRows.forEach(row=>{
-    const key = String(row[R.dfigpid]).trim();
-    if(!retMap.has(key)){
-      retMap.set(key, { rdate:row[R.txdt], sigpid:String(row[R.sigpid]).trim(), dfigpid:key, rval:0,
-        custcd:row[R.custcd], custname:row[R.custname], loc:row[R.loccd] });
-    }
-    retMap.get(key).rval += Number(row[R.grval])||0;
-  });
-
-  const matched = new Set();
-  const records = [];
-  invMap.forEach((inv)=>{
-    const rec = { loc:inv.loc, store:inv.store, styp:inv.styp, sdate:inv.sdate, pono:inv.pono, igpid:inv.igpid,
-      custcd:inv.custcd, custname:inv.custname, sval:Math.round(inv.sval*100)/100,
-      rdate:'', sigpid:'', dfigpid:'', rval:0 };
-    if(retMap.has(inv.igpid)){
-      const m = retMap.get(inv.igpid);
-      rec.rdate = m.rdate; rec.sigpid = m.sigpid; rec.dfigpid = m.dfigpid; rec.rval = Math.round(m.rval*100)/100;
-      matched.add(inv.igpid);
-    }
-    records.push(rec);
-  });
-  retMap.forEach((m, key)=>{
-    if(!matched.has(key)){
-      records.push({ loc:m.loc, store:'', styp:'', sdate:'', pono:'', igpid:'',
-        custcd:m.custcd, custname:m.custname, sval:0,
-        rdate:m.rdate, sigpid:m.sigpid, dfigpid:m.dfigpid, rval:Math.round(m.rval*100)/100 });
-    }
-  });
-  return {records, matchedCount: matched.size, totalReturns: retMap.size};
+  return byMonth;
 }
 
 document.getElementById('dtGenerateBtn').addEventListener('click', async ()=>{
@@ -1321,86 +1436,70 @@ document.getElementById('dtGenerateBtn').addEventListener('click', async ()=>{
     statusEl.textContent = 'Reading Sales Return Report…';
     const returnData = await dtReadSheet(returnFile);
 
-    statusEl.textContent = 'Building combined ledger…';
-    const {records, matchedCount, totalReturns} = dtBuildLedger(salesData.cols, salesData.rows, returnData.cols, returnData.rows);
+    statusEl.textContent = 'Grouping by month…';
+    const salesByMonth = dtGroupByMonth(salesData.cols, salesData.rows, 'TXDT');
+    const returnByMonth = dtGroupByMonth(returnData.cols, returnData.rows, 'TXDT');
+    const monthsFound = [...new Set([...salesByMonth.keys(), ...returnByMonth.keys()])].sort();
+
+    statusEl.textContent = 'Fetching current manifest…';
+    let existingMonths = [];
+    try{
+      const res = await fetch('./data/manifest.json', {cache:'no-store'});
+      if(res.ok){ const m = await res.json(); existingMonths = m.months || []; }
+    } catch(e){ /* fine if this fails, e.g. first-ever run */ }
+    const mergedMonths = [...new Set([...existingMonths, ...monthsFound])].sort();
 
     statusEl.textContent = 'Preparing downloads…';
-    dtDownloadJSON(salesData, 'sales_data.json');
-    setTimeout(()=> dtDownloadJSON(returnData, 'return_data.json'), 300);
-    setTimeout(()=> dtDownloadJSON(records, 'ledger_data.json'), 600);
+    let delay = 0;
+    const steps = [];
+    monthsFound.forEach(m=>{
+      if(salesByMonth.has(m)){
+        steps.push(['sales-'+m+'.json → data/sales/'+m+'.json', {cols:salesData.cols, rows:salesByMonth.get(m)}, 'sales-'+m+'.json']);
+      }
+      if(returnByMonth.has(m)){
+        steps.push(['returns-'+m+'.json → data/returns/'+m+'.json', {cols:returnData.cols, rows:returnByMonth.get(m)}, 'returns-'+m+'.json']);
+      }
+    });
+    steps.push(['manifest.json → data/manifest.json (replace)', {months: mergedMonths}, 'manifest.json']);
 
+    steps.forEach(([label, obj, filename], i)=>{
+      setTimeout(()=> dtDownloadJSON(obj, filename), i*250);
+    });
+
+    const instructions = steps.map(([label])=> '• ' + label).join('\n');
     statusEl.textContent =
-      `✓ Done — ${salesData.rows.length} sales rows, ${returnData.rows.length} return rows.\n` +
-      `✓ Ledger: ${records.length} rows (${matchedCount} of ${totalReturns} returns linked by IGPID).\n` +
-      `Three files downloaded — upload them into the data/ folder on GitHub, replacing the existing ones.`;
+      `✓ Found data for: ${monthsFound.join(', ')}\n` +
+      `✓ ${steps.length} files downloaded. Upload each one to GitHub, renaming as shown (remove the "sales-"/"returns-" prefix so the filename becomes just the month, e.g. sales-${monthsFound[0]}.json → ${monthsFound[0]}.json inside data/sales/):\n\n` +
+      instructions +
+      `\n\nThe ledger (Sales ↔ Return linking) is calculated automatically by the dashboard — no separate ledger file needed.`;
   } catch(err){
-    statusEl.textContent = '⚠️ Error: ' + err.message + '\nMake sure both files match the expected column layout.';
+    statusEl.textContent = '⚠️ Error: ' + err.message + '\nMake sure both files match the expected column layout (same headers as usual).';
   }
 });
 
-/* ---------------- data loading (fetches JSON from ./data/ folder) ---------------- */
-async function loadJSON(path){
-  const res = await fetch(path, {cache:'no-store'});
-  if(!res.ok) throw new Error('Failed to load ' + path + ' (HTTP ' + res.status + ')');
-  return await res.json();
-}
-
+/* ---------------- init (manifest + latest month only, for fast first load) ---------------- */
 async function init(){
   try{
-    document.getElementById('loadMsg').textContent = 'Loading sales data…';
-    [FULL, RET_FULL, LEDGER] = await Promise.all([
-      loadJSON('./data/sales_data.json'),
-      loadJSON('./data/return_data.json'),
-      loadJSON('./data/ledger_data.json')
-    ]);
+    document.getElementById('loadMsg').textContent = 'Loading manifest…';
+    const res = await fetch('./data/manifest.json', {cache:'no-store'});
+    if(!res.ok) throw new Error('Failed to load ./data/manifest.json (HTTP ' + res.status + ')');
+    MANIFEST = await res.json();
+    if(!MANIFEST.months || MANIFEST.months.length===0) throw new Error('manifest.json has no months listed.');
+    MANIFEST.months.sort();
+    updateDateBounds();
 
-    COLS = FULL.cols; RAW = FULL.rows;
-    RET_COLS = RET_FULL.cols; RET_RAW = RET_FULL.rows;
-
-    I = {
-      loc: idx('LOCNAME'), store: idx('STORENAME'), dt: idx('TXDT'), item: idx('ITEMNAME'),
-      cust: idx('CUSTNAME'), qty: idx('SALEQTY'), gr: idx('GRVAL'), bs: idx('BSVAL'),
-      po: idx('Po No'), tx: idx('TXID'), stype: idx('Sales Type'),
-      docsrscd: idx('DOCSRSCD'), itemcd: idx('ITEMCD'), custcd: idx('CUSTCD'),
-      btrefno: idx('BTREFNO'), igpid: idx('IGPID')
-    };
-    ROWS = RAW.map(r => ({
-      d: r[I.dt], l: cleanLoc(r[I.loc]), st: r[I.stype], it: r[I.item], c: r[I.cust],
-      stc: r[I.store], q: r[I.qty], g: r[I.gr], b: r[I.bs], po: String(r[I.po]), tx: r[I.tx],
-      docsrscd: r[I.docsrscd], itemcd: r[I.itemcd], custcd: r[I.custcd],
-      btrefno: r[I.btrefno], igpid: r[I.igpid]
-    }));
-
-    RI = {
-      loc: ridx('LOCNAME'), dt: ridx('TXDT'), cust: ridx('CUSTNAME'), item: ridx('ITEMNAME'),
-      qty: ridx('RETQTY'), gr: ridx('GRVAL'), bs: ridx('BSVAL'), tx: ridx('TXID'),
-      reason: ridx('DFSLRTRSCD'), btrefno: ridx('BTREFNO'), stype: ridx('Sales Type')
-    };
-    RETURN_ROWS = RET_RAW.map(r => ({
-      d: r[RI.dt], l: cleanLoc(r[RI.loc]), c: r[RI.cust], it: r[RI.item],
-      q: r[RI.qty], g: r[RI.gr], b: r[RI.bs], tx: r[RI.tx], reason: r[RI.reason] || 'Unspecified',
-      st: r[RI.stype] || 'Unspecified'
-    }));
-
-    LEDGER_ROWS = LEDGER;
+    const latestMonth = MANIFEST.months[MANIFEST.months.length-1];
+    document.getElementById('loadMsg').textContent = 'Loading ' + latestMonth + '…';
+    await ensureMonthsLoaded([latestMonth]);
 
     setupFilters();
-    renderAll(ROWS, RETURN_ROWS);
-    renderReturns(RETURN_ROWS);
-    (function initReturnsKpi(){
-      const grossTotal = ROWS.reduce((a,r)=>a+r.g,0);
-      const retTotal = RETURN_ROWS.reduce((a,r)=>a+r.g,0);
-      document.getElementById('kpiRetVal').innerHTML = '₹' + cr(retTotal);
-      document.getElementById('kpiRetRate').innerHTML = grossTotal? (retTotal/grossTotal*100).toFixed(2)+'%' : '0%';
-      document.getElementById('kpiNetSales').innerHTML = '₹' + cr(grossTotal - retTotal);
-    })();
-    runSearch();
+    await applyDateFilter();
 
     document.getElementById('loadOverlay').style.display = 'none';
   } catch(err){
     document.getElementById('loadMsg').innerHTML =
       '⚠️ Could not load data.<br><span style="font-size:11px; opacity:.8;">' + err.message +
-      '<br><br>Make sure sales_data.json, return_data.json and ledger_data.json exist inside a <b>data/</b> folder next to this HTML file, and that the site is served over http(s) — opening the file directly (file://) will not work.</span>';
+      '<br><br>Make sure manifest.json and the sales/, returns/ folders exist inside a <b>data/</b> folder next to this HTML file, and that the site is served over http(s) — opening the file directly (file://) will not work.</span>';
   }
 }
 init();
