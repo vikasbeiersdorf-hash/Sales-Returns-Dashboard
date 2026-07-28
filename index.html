@@ -276,7 +276,7 @@
   </button>
   <button class="tab-btn" data-tab="allsales">
     <svg viewBox="0 0 24 24" fill="none" stroke="#8259a3" stroke-width="2"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/></svg>
-    All Sales Report
+    Sales &amp; Return Ledger
   </button>
   <button class="tab-btn" data-tab="returns">
     <svg viewBox="0 0 24 24" fill="none" stroke="#c1512e" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg>
@@ -408,21 +408,31 @@
     </section>
   </div>
 
-  <!-- ===================== TAB: ALL SALES REPORT (with inner Sales/Return sub-tabs) ===================== -->
+  <!-- ===================== TAB: SALES & RETURN LEDGER (with inner Sales/Return sub-tabs) ===================== -->
   <div class="tab-panel" id="tab-allsales">
     <section>
       <div class="section-head">
-        <h2>All Sales Report</h2>
+        <h2 id="allSalesSectionTitle">All Sales Report</h2>
         <div style="display:flex; gap:8px;">
           <button class="qbtn active" id="innerTabSalesBtn" data-innertab="innersales">Sales Report</button>
-          <button class="qbtn" id="innerTabReturnBtn" data-innertab="innerreturn">Return Report</button>
+          <button class="qbtn" id="innerTabReturnBtn" data-innertab="innerreturn">Sales Return</button>
         </div>
       </div>
 
       <div id="inner-innersales" class="inner-tab-panel active">
         <div class="card">
           <div class="allsales-toolbar">
-            <div class="allsales-info" id="allsalesInfo">Loading…</div>
+            <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="filter-field">
+                <label>From</label>
+                <input type="date" id="asDateFrom" style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; border:1px solid var(--line); padding:7px 9px; border-radius:3px;">
+              </div>
+              <div class="filter-field">
+                <label>To</label>
+                <input type="date" id="asDateTo" style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; border:1px solid var(--line); padding:7px 9px; border-radius:3px;">
+              </div>
+              <div class="allsales-info" id="allsalesInfo">Loading…</div>
+            </div>
             <button class="btn-download" id="downloadBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
               Download Excel
@@ -447,7 +457,17 @@
       <div id="inner-innerreturn" class="inner-tab-panel">
         <div class="card">
           <div class="allsales-toolbar">
-            <div class="allsales-info" id="retAllInfo">Loading…</div>
+            <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="filter-field">
+                <label>From</label>
+                <input type="date" id="rsDateFrom" style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; border:1px solid var(--line); padding:7px 9px; border-radius:3px;">
+              </div>
+              <div class="filter-field">
+                <label>To</label>
+                <input type="date" id="rsDateTo" style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; border:1px solid var(--line); padding:7px 9px; border-radius:3px;">
+              </div>
+              <div class="allsales-info" id="retAllInfo">Loading…</div>
+            </div>
             <button class="btn-download" id="retDownloadBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
               Download Excel
@@ -731,18 +751,20 @@ tabButtons.forEach(btn=>{
   });
 });
 
-/* inner sub-tabs within All Sales Report tab: Sales Report | Return Report */
+/* inner sub-tabs within Sales & Return Ledger tab: Sales Report | Sales Return */
 document.getElementById('innerTabSalesBtn').addEventListener('click', ()=>{
   document.getElementById('innerTabSalesBtn').classList.add('active');
   document.getElementById('innerTabReturnBtn').classList.remove('active');
   document.getElementById('inner-innersales').classList.add('active');
   document.getElementById('inner-innerreturn').classList.remove('active');
+  document.getElementById('allSalesSectionTitle').textContent = 'All Sales Report';
 });
 document.getElementById('innerTabReturnBtn').addEventListener('click', ()=>{
   document.getElementById('innerTabReturnBtn').classList.add('active');
   document.getElementById('innerTabSalesBtn').classList.remove('active');
   document.getElementById('inner-innerreturn').classList.add('active');
   document.getElementById('inner-innersales').classList.remove('active');
+  document.getElementById('allSalesSectionTitle').textContent = 'All Sales Return';
   if(!allreturnsInited){ initReturnsAll(); }
 });
 
@@ -1133,36 +1155,56 @@ function runSearch(){
   }
 }
 
-/* ---------------- All Sales Report tab (full raw data, unfiltered) ---------------- */
+/* ---------------- All Sales Report inner tab (with its own date filter) ---------------- */
 let allsalesInited = false;
 let asPage = 1;
 const asPageSize = 100;
 let asTotalPages = 1;
+let asFilteredRows = [];
+
+function getAsFilteredRaw(){
+  const from = document.getElementById('asDateFrom').value;
+  const to = document.getElementById('asDateTo').value;
+  if(!from && !to) return RAW;
+  return RAW.filter(row => {
+    const d = row[I.dt];
+    return (!from || d >= from) && (!to || d <= to);
+  });
+}
 
 async function initAllSales(){
   allsalesInited = true;
   document.getElementById('allsalesInfo').textContent = 'Loading full dataset…';
   await ensureAllMonthsLoaded();
-  asTotalPages = Math.max(1, Math.ceil(RAW.length / asPageSize));
+  document.getElementById('asDateFrom').min = MIN_DATE; document.getElementById('asDateFrom').max = MAX_DATE;
+  document.getElementById('asDateTo').min = MIN_DATE; document.getElementById('asDateTo').max = MAX_DATE;
+  document.getElementById('asDateFrom').value = MIN_DATE;
+  document.getElementById('asDateTo').value = MAX_DATE;
   const head = document.getElementById('allsalesHead');
   head.innerHTML = COLS.map(c=>`<th>${c}</th>`).join('');
-  document.getElementById('allsalesInfo').textContent = num(RAW.length) + ' rows × ' + COLS.length + ' columns — exact export of the source file, unaffected by the date filter above.';
+  document.getElementById('asDateFrom').addEventListener('change', ()=>{ asPage=1; renderAllSalesPage(); });
+  document.getElementById('asDateTo').addEventListener('change', ()=>{ asPage=1; renderAllSalesPage(); });
   renderAllSalesPage();
 }
 function renderAllSalesPage(){
+  asFilteredRows = getAsFilteredRaw();
+  asTotalPages = Math.max(1, Math.ceil(asFilteredRows.length / asPageSize));
+  if(asPage > asTotalPages) asPage = asTotalPages;
+  document.getElementById('allsalesInfo').textContent = num(asFilteredRows.length) + ' of ' + num(RAW.length) + ' rows × ' + COLS.length + ' columns' + (asFilteredRows.length!==RAW.length? ' (date filtered)':' — full source file');
+
   const body = document.getElementById('allsalesBody');
   const start = (asPage-1)*asPageSize;
-  const end = Math.min(start+asPageSize, RAW.length);
+  const end = Math.min(start+asPageSize, asFilteredRows.length);
   let html = '';
   for(let i=start; i<end; i++){
-    const row = RAW[i];
+    const row = asFilteredRows[i];
     html += '<tr>' + row.map(v=>{
       const isNum = typeof v === 'number';
       return `<td${isNum?' class="num"':''}>${isNum ? (Number.isInteger(v)? num(v) : v.toLocaleString('en-IN',{maximumFractionDigits:2})) : v}</td>`;
     }).join('') + '</tr>';
   }
   body.innerHTML = html;
-  document.getElementById('pagerInfo').textContent = `Page ${asPage} of ${asTotalPages} · rows ${num(start+1)}–${num(end)} of ${num(RAW.length)}`;
+  document.getElementById('pagerInfo').textContent = `Page ${asPage} of ${asTotalPages} · rows ${num(start+1)}–${num(end)} of ${num(asFilteredRows.length)}`;
   document.getElementById('pagerFirst').disabled = asPage===1;
   document.getElementById('pagerPrev').disabled = asPage===1;
   document.getElementById('pagerNext').disabled = asPage===asTotalPages;
@@ -1174,43 +1216,64 @@ document.getElementById('pagerNext').addEventListener('click', ()=>{ if(asPage<a
 document.getElementById('pagerLast').addEventListener('click', ()=>{ asPage=asTotalPages; renderAllSalesPage(); });
 
 document.getElementById('downloadBtn').addEventListener('click', ()=>{
-  const aoa = [COLS, ...RAW];
+  const rows = getAsFilteredRaw();
+  const aoa = [COLS, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Sales Report');
-  XLSX.writeFile(wb, 'Sales_Report_Full_Data.xlsx');
+  XLSX.writeFile(wb, 'Sales_Report_Data.xlsx');
 });
 
-/* ---------------- All Returns Report tab (full raw data, unfiltered) ---------------- */
+/* ---------------- All Returns Report inner tab (with its own date filter) ---------------- */
 let allreturnsInited = false;
 let rsPage = 1;
 const rsPageSize = 100;
 let rsTotalPages = 1;
+let rsFilteredRows = [];
+
+function getRsFilteredRaw(){
+  const from = document.getElementById('rsDateFrom').value;
+  const to = document.getElementById('rsDateTo').value;
+  if(!from && !to) return RET_RAW;
+  return RET_RAW.filter(row => {
+    const d = row[RI.dt];
+    return (!from || d >= from) && (!to || d <= to);
+  });
+}
 
 async function initReturnsAll(){
   allreturnsInited = true;
   document.getElementById('retAllInfo').textContent = 'Loading full dataset…';
   await ensureAllMonthsLoaded();
-  rsTotalPages = Math.max(1, Math.ceil(RET_RAW.length / rsPageSize));
+  document.getElementById('rsDateFrom').min = MIN_DATE; document.getElementById('rsDateFrom').max = MAX_DATE;
+  document.getElementById('rsDateTo').min = MIN_DATE; document.getElementById('rsDateTo').max = MAX_DATE;
+  document.getElementById('rsDateFrom').value = MIN_DATE;
+  document.getElementById('rsDateTo').value = MAX_DATE;
   const head = document.getElementById('retAllHead');
   head.innerHTML = RET_COLS.map(c=>`<th>${c}</th>`).join('');
-  document.getElementById('retAllInfo').textContent = num(RET_RAW.length) + ' rows × ' + RET_COLS.length + ' columns — exact export of the source file, unaffected by the date filter above.';
+  document.getElementById('rsDateFrom').addEventListener('change', ()=>{ rsPage=1; renderReturnsAllPage(); });
+  document.getElementById('rsDateTo').addEventListener('change', ()=>{ rsPage=1; renderReturnsAllPage(); });
   renderReturnsAllPage();
 }
 function renderReturnsAllPage(){
+  rsFilteredRows = getRsFilteredRaw();
+  rsTotalPages = Math.max(1, Math.ceil(rsFilteredRows.length / rsPageSize));
+  if(rsPage > rsTotalPages) rsPage = rsTotalPages;
+  document.getElementById('retAllInfo').textContent = num(rsFilteredRows.length) + ' of ' + num(RET_RAW.length) + ' rows × ' + RET_COLS.length + ' columns' + (rsFilteredRows.length!==RET_RAW.length? ' (date filtered)':' — full source file');
+
   const body = document.getElementById('retAllBody');
   const start = (rsPage-1)*rsPageSize;
-  const end = Math.min(start+rsPageSize, RET_RAW.length);
+  const end = Math.min(start+rsPageSize, rsFilteredRows.length);
   let html = '';
   for(let i=start; i<end; i++){
-    const row = RET_RAW[i];
+    const row = rsFilteredRows[i];
     html += '<tr>' + row.map(v=>{
       const isNum = typeof v === 'number';
       return `<td${isNum?' class="num"':''}>${isNum ? (Number.isInteger(v)? num(v) : v.toLocaleString('en-IN',{maximumFractionDigits:2})) : v}</td>`;
     }).join('') + '</tr>';
   }
   body.innerHTML = html;
-  document.getElementById('retPagerInfo').textContent = `Page ${rsPage} of ${rsTotalPages} · rows ${num(start+1)}–${num(end)} of ${num(RET_RAW.length)}`;
+  document.getElementById('retPagerInfo').textContent = `Page ${rsPage} of ${rsTotalPages} · rows ${num(start+1)}–${num(end)} of ${num(rsFilteredRows.length)}`;
   document.getElementById('retPagerFirst').disabled = rsPage===1;
   document.getElementById('retPagerPrev').disabled = rsPage===1;
   document.getElementById('retPagerNext').disabled = rsPage===rsTotalPages;
@@ -1222,11 +1285,12 @@ document.getElementById('retPagerNext').addEventListener('click', ()=>{ if(rsPag
 document.getElementById('retPagerLast').addEventListener('click', ()=>{ rsPage=rsTotalPages; renderReturnsAllPage(); });
 
 document.getElementById('retDownloadBtn').addEventListener('click', ()=>{
-  const aoa = [RET_COLS, ...RET_RAW];
+  const rows = getRsFilteredRaw();
+  const aoa = [RET_COLS, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Sales Returns');
-  XLSX.writeFile(wb, 'Sales_Return_Report_Full_Data.xlsx');
+  XLSX.writeFile(wb, 'Sales_Return_Report_Data.xlsx');
 });
 
 /* ---------------- Customer Ledger tab (unified Sales + Sales Return, computed dynamically) ---------------- */
