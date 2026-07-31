@@ -86,6 +86,11 @@
     border-radius:8px 8px 0 0; border-bottom:3px solid var(--tab-active-line);
     font-weight:600;
   }
+  .tabs-bar-icon{
+    display:flex; align-items:center; padding-right:14px; margin-right:6px;
+    border-right:1px solid #e6e3d8; flex-shrink:0;
+  }
+  .tabs-bar-icon svg{ width:19px; height:19px; }
 
   /* ---------- Filter bar ---------- */
   .filter-bar-wrap{ background:#fbfaf6; border-bottom:1px solid var(--line); }
@@ -245,19 +250,20 @@
 <div class="masthead">
   <div class="masthead-top">
     <div>
-      <p class="eyebrow">Secondary Sales · Distribution Ledger</p>
-      <h1 class="title">Sales Report</h1>
+      <p class="eyebrow">Beiersdorf India Pvt. Ltd.</p>
+      <h1 class="title">Sales Report &amp; Return Report</h1>
       <p class="subtitle">Line-item invoice register across all channels, locations and stockists.</p>
     </div>
     <div class="masthead-meta">
-      <div>Prepared for <b>Business Review</b></div>
       <div>Generated <b id="genDate"></b></div>
-      <div>Source · Sales_Report-Jun2026.xlsx</div>
     </div>
   </div>
 </div>
 
 <div class="tabs-bar" id="tabsBar">
+  <span class="tabs-bar-icon" title="Sales &amp; Return Dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#8259a3" stroke-width="2"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/></svg>
+  </span>
   <button class="tab-btn active" data-tab="charts">
     <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="12" width="4" height="8" rx="1" fill="#2f5fa8"/><rect x="10" y="7" width="4" height="13" rx="1" fill="#2c9e6b"/><rect x="17" y="3" width="4" height="17" rx="1" fill="#e08a3c"/></svg>
     Charts
@@ -537,9 +543,6 @@
           <button class="qbtn" data-ledfilter="withret">With return only</button>
           <button class="qbtn" data-ledfilter="noret">No return</button>
         </div>
-        <div class="search-meta" id="ledgerNote" style="align-self:center; max-width:360px; line-height:1.5;">
-          One row per sales invoice. Return columns are filled only where the return record's DFIGPID matches that invoice's IGPID — real linkage, not estimated.
-        </div>
       </div>
     </div>
 
@@ -794,7 +797,12 @@ function refreshDropdowns(){
 function setupFilters(){
   fromInput = document.getElementById('dateFrom');
   toInput = document.getElementById('dateTo');
-  document.getElementById('genDate').textContent = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+  if(MANIFEST.generated_at){
+    const gd = new Date(MANIFEST.generated_at);
+    document.getElementById('genDate').textContent = gd.toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) + ', ' + gd.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+  } else {
+    document.getElementById('genDate').textContent = 'Unknown';
+  }
 
   fromInput.min = MIN_DATE; fromInput.max = MAX_DATE;
   toInput.min = MIN_DATE; toInput.max = MAX_DATE;
@@ -1349,10 +1357,8 @@ function buildLedgerFromLoaded(){
 
 async function initLedger(){
   ledgerInited = true;
-  document.getElementById('ledgerNote').textContent = 'Loading full dataset to build the combined ledger…';
   await ensureAllMonthsLoaded();
   LEDGER_ROWS = buildLedgerFromLoaded();
-  document.getElementById('ledgerNote').textContent = 'One row per sales invoice. Return columns are filled only where the return record\'s DFIGPID matches that invoice\'s IGPID — real linkage, not estimated.';
 
   document.getElementById('ledgerSearch').addEventListener('input', ()=>{ ledPage=1; renderLedgerTable(); });
   document.getElementById('ledFirst').addEventListener('click', ()=>{ ledPage=1; renderLedgerTable(); });
@@ -1524,7 +1530,7 @@ document.getElementById('dtGenerateBtn').addEventListener('click', async ()=>{
         steps.push(['returns-'+m+'.json → data/returns/'+m+'.json', {cols:returnData.cols, rows:returnByMonth.get(m)}, 'returns-'+m+'.json']);
       }
     });
-    steps.push(['manifest.json → data/manifest.json (replace)', {months: mergedMonths}, 'manifest.json']);
+    steps.push(['manifest.json → data/manifest.json (replace)', {months: mergedMonths, generated_at: new Date().toISOString()}, 'manifest.json']);
 
     steps.forEach(([label, obj, filename], i)=>{
       setTimeout(()=> dtDownloadJSON(obj, filename), i*250);
