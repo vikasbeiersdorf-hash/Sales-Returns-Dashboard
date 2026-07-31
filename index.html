@@ -68,29 +68,49 @@
   .masthead-meta b{color:#f2ede1; font-weight:600;}
 
   /* ---------- Tabs bar ---------- */
-  .tabs-bar{
-    background:#fff; border-bottom:1px solid #e6e3d8;
-    padding:0 56px; display:flex; gap:6px; overflow-x:auto;
-    position:sticky; top:0; z-index:20; box-shadow:0 1px 0 rgba(0,0,0,0.02);
+  .app-body{ display:flex; align-items:flex-start; }
+  .sidebar{
+    background:#fff; border-right:1px solid #e6e3d8;
+    width:230px; flex-shrink:0;
+    display:flex; flex-direction:column; gap:2px;
+    padding:14px 10px;
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+    transition: margin-left .22s ease, opacity .22s ease;
+    z-index:20;
   }
+  .sidebar.collapsed{ margin-left:-230px; opacity:0; pointer-events:none; }
+  .main-content{ flex:1; min-width:0; }
+
+  #sidebarToggle{
+    position:fixed; top:14px; left:14px; z-index:70;
+    width:36px; height:36px; border-radius:6px; border:none; cursor:pointer;
+    background:rgba(242,237,225,0.15); color:#f2ede1;
+    display:flex; align-items:center; justify-content:center;
+    transition:.15s;
+  }
+  #sidebarToggle:hover{ background:rgba(242,237,225,0.28); }
+  #sidebarToggle svg{ width:19px; height:19px; }
+  body.sidebar-is-collapsed #sidebarToggle{ color:var(--ink); background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); }
+
   .tab-btn{
-    display:flex; align-items:center; gap:9px; padding:15px 16px 13px;
-    border:none; background:transparent; color:#697086; font-size:14.5px; font-weight:500;
-    cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;
-    font-family:'Inter',sans-serif; transition:.15s;
+    display:flex; align-items:center; gap:10px; padding:11px 12px;
+    border:none; background:transparent; color:#697086; font-size:14px; font-weight:500;
+    cursor:pointer; border-radius:6px; white-space:nowrap; text-align:left; width:100%;
+    font-family:'Inter',sans-serif; transition:.15s; border-left:3px solid transparent;
   }
   .tab-btn svg{ width:17px; height:17px; flex-shrink:0; }
   .tab-btn:hover{ background:#f7f8fb; }
   .tab-btn.active{
     color:#152340; background:var(--tab-active-bg);
-    border-radius:8px 8px 0 0; border-bottom:3px solid var(--tab-active-line);
+    border-left:3px solid var(--tab-active-line);
     font-weight:600;
   }
   .tabs-bar-icon{
-    display:flex; align-items:center; padding-right:14px; margin-right:6px;
-    border-right:1px solid #e6e3d8; flex-shrink:0;
+    display:flex; align-items:center; gap:10px; padding:8px 12px 16px;
+    margin-bottom:8px; border-bottom:1px solid #e6e3d8; flex-shrink:0;
   }
-  .tabs-bar-icon svg{ width:19px; height:19px; }
+  .tabs-bar-icon svg{ width:19px; height:19px; flex-shrink:0; }
+  .tabs-bar-icon-label{ font-size:13px; font-weight:700; color:var(--ink); font-family:'Fraunces',serif; }
 
   /* ---------- Filter bar ---------- */
   .filter-bar-wrap{ background:#fbfaf6; border-bottom:1px solid var(--line); }
@@ -226,7 +246,6 @@
   @media (max-width:1100px){ .grid-3col{ grid-template-columns:1fr; } .grid-wide{ grid-template-columns:1fr; } }
   @media (max-width:920px){
     .masthead{padding:28px 20px 22px;}
-    .tabs-bar{ padding:0 20px; }
     .filter-bar{ padding:14px 20px; }
     .wrap{padding:24px 20px 50px;}
     .kpi-row{ grid-template-columns:repeat(2,1fr);}
@@ -235,6 +254,8 @@
     .masthead-top{flex-direction:column; gap:14px;}
     .masthead-meta{text-align:left;}
     #resultNote{ margin-left:0; }
+    .sidebar{ position:fixed; top:0; left:0; height:100vh; box-shadow:0 0 30px rgba(0,0,0,0.15); }
+    .sidebar.collapsed{ margin-left:-230px; }
   }
 </style>
 </head>
@@ -260,9 +281,15 @@
   </div>
 </div>
 
-<div class="tabs-bar" id="tabsBar">
+<button id="sidebarToggle" title="Show/hide navigation" aria-label="Toggle navigation">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+</button>
+
+<div class="app-body">
+<aside class="sidebar" id="tabsBar">
   <span class="tabs-bar-icon" title="Sales &amp; Return Dashboard">
     <svg viewBox="0 0 24 24" fill="none" stroke="#8259a3" stroke-width="2"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/></svg>
+    <span class="tabs-bar-icon-label">Sales &amp; Return</span>
   </span>
   <button class="tab-btn active" data-tab="charts">
     <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="12" width="4" height="8" rx="1" fill="#2f5fa8"/><rect x="10" y="7" width="4" height="13" rx="1" fill="#2c9e6b"/><rect x="17" y="3" width="4" height="17" rx="1" fill="#e08a3c"/></svg>
@@ -292,7 +319,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="#3f6fd6" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
     Customer Ledger
   </button>
-</div>
+</aside>
+<main class="main-content">
 
 <div class="filter-bar-wrap" id="filterBarWrap">
   <div class="filter-bar">
@@ -596,6 +624,8 @@
   </footer>
 
 </div>
+</main>
+</div>
 
 <!-- ===================== HIDDEN DATA TOOLS MODAL ===================== -->
 <div id="dataToolsModal" style="display:none; position:fixed; inset:0; background:rgba(22,29,43,0.55); z-index:1000; align-items:center; justify-content:center;">
@@ -739,6 +769,24 @@ function cr(n){ return (n/1e7).toFixed(2) + ' Cr'; }
 function fmtDate(d){ const dt = new Date(d+'T00:00:00'); return dt.getDate()+' '+dt.toLocaleString('en-IN',{month:'short'}); }
 
 /* ---------------- tabs ---------------- */
+/* ---------------- sidebar toggle ---------------- */
+const sidebarEl = document.getElementById('tabsBar');
+const sidebarToggleBtn = document.getElementById('sidebarToggle');
+function setSidebarCollapsed(collapsed){
+  sidebarEl.classList.toggle('collapsed', collapsed);
+  document.body.classList.toggle('sidebar-is-collapsed', collapsed);
+  try{ localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); }catch(e){}
+}
+sidebarToggleBtn.addEventListener('click', ()=>{
+  setSidebarCollapsed(!sidebarEl.classList.contains('collapsed'));
+});
+(function initSidebarState(){
+  let collapsed = false;
+  try{ collapsed = localStorage.getItem('sidebarCollapsed') === '1'; }catch(e){}
+  if(window.innerWidth <= 920) collapsed = true; // start collapsed on mobile
+  setSidebarCollapsed(collapsed);
+})();
+
 const tabButtons = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 const filterBarWrap = document.getElementById('filterBarWrap');
@@ -751,6 +799,7 @@ tabButtons.forEach(btn=>{
     filterBarWrap.style.display = (btn.dataset.tab === 'allsales' || btn.dataset.tab === 'ledger') ? 'none' : 'block';
     if(btn.dataset.tab === 'allsales' && !allsalesInited){ initAllSales(); }
     if(btn.dataset.tab === 'ledger' && !ledgerInited){ initLedger(); }
+    if(window.innerWidth <= 920) setSidebarCollapsed(true);
   });
 });
 
